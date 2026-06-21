@@ -1,0 +1,126 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum GenderCategory {
+  KADIN
+  ERKEK
+  UNISEX
+  BELIRTILMEMIS
+}
+
+enum StockStatus {
+  MEVCUT
+  AZ_STOK
+  BITTI
+  YETERSIZ
+  TUTARSIZ
+}
+
+enum MovementType {
+  initial_import
+  production_usage
+  manual_adjustment
+  correction
+  deletion_reversal
+}
+
+enum ImportStatus {
+  pending
+  processing
+  completed
+  failed
+}
+
+model Essence {
+  id                      String         @id @default(cuid())
+  name                    String
+  genderCategory          GenderCategory @default(BELIRTILMEMIS)
+  initialVolumeMl         Float
+  currentVolumeMl         Float
+  minimumStockThresholdMl Float          @default(5)
+  totalUsedMl             Float          @default(0)
+  notes                   String?
+  status                  StockStatus    @default(MEVCUT)
+  createdAt               DateTime       @default(now())
+  updatedAt               DateTime       @updatedAt
+
+  batches        Batch[]
+  stockMovements StockMovement[]
+}
+
+model Perfume {
+  id              String         @id @default(cuid())
+  name            String
+  brandName       String?
+  genderCategory  GenderCategory @default(BELIRTILMEMIS)
+  description     String?
+  publicVisible   Boolean        @default(false)
+  coverImageUrl   String?
+  notes           String?
+  slug            String         @unique
+  latestBatchDate DateTime?
+  totalProducedMl Float          @default(0)
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  batches Batch[]
+}
+
+model Batch {
+  id              String    @id @default(cuid())
+  perfumeId       String
+  essenceId       String
+  batchLabel      String
+  productionDate  DateTime
+  totalVolumeMl   Float
+  essenceRatio    Float
+  essenceVolumeMl Float
+  alcoholVolumeMl Float
+  waterVolumeMl   Float
+  cost            Float?
+  notes           String?
+  publicVisible   Boolean   @default(false)
+  stockDeducted   Boolean   @default(false)
+  deletedAt       DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  perfume        Perfume         @relation(fields: [perfumeId], references: [id])
+  essence        Essence         @relation(fields: [essenceId], references: [id])
+  stockMovements StockMovement[]
+}
+
+model StockMovement {
+  id           String       @id @default(cuid())
+  essenceId    String
+  batchId      String?
+  movementType MovementType
+  quantityMl   Float
+  reason       String?
+  createdAt    DateTime     @default(now())
+  createdBy    String?
+
+  essence Essence @relation(fields: [essenceId], references: [id])
+  batch   Batch?  @relation(fields: [batchId], references: [id])
+}
+
+model ImportJob {
+  id             String       @id @default(cuid())
+  filename       String
+  status         ImportStatus @default(pending)
+  totalRows      Int          @default(0)
+  successfulRows Int          @default(0)
+  failedRows     Int          @default(0)
+  warningsCount  Int          @default(0)
+  mappingConfig  Json?
+  errorReport    Json?
+  createdAt      DateTime     @default(now())
+  completedAt    DateTime?
+}
