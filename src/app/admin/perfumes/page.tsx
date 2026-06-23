@@ -115,8 +115,8 @@ export default function PerfumesPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <div className="min-w-0">
           <h1 className="text-3xl font-serif" style={{ color: "var(--charcoal)", fontFamily: "var(--font-gloock)" }}>
             Parfümler
           </h1>
@@ -124,7 +124,7 @@ export default function PerfumesPage() {
             {perfumes.length} parfüm · {perfumes.filter(p => p.publicVisible).length} public
           </p>
         </div>
-        <Button onClick={openCreate} style={{ background: "var(--charcoal)", color: "var(--ivory)" }}>
+        <Button onClick={openCreate} className="shrink-0" style={{ background: "var(--charcoal)", color: "var(--ivory)" }}>
           <Plus size={14} className="mr-1.5" /> Yeni Parfüm
         </Button>
       </div>
@@ -147,7 +147,7 @@ export default function PerfumesPage() {
             {!search && <Button onClick={openCreate} variant="outline" size="sm" className="mt-3">İlk parfümü ekle</Button>}
           </div>
         ) : (
-          <table className="w-full text-sm">
+          <div className="overflow-x-auto"><table className="w-full text-sm min-w-[640px]">
             <thead>
               <tr style={{ borderBottom: "1px solid var(--border)", background: "var(--ivory)" }}>
                 {["Parfüm Adı", "Marka", "Cinsiyet", "Partiler", "Son Üretim", "Görünürlük", "Eylemler"].map(h => (
@@ -192,7 +192,7 @@ export default function PerfumesPage() {
                 </tr>
               ))}
             </tbody>
-          </table>
+          </table></div>
         )}
       </div>
 

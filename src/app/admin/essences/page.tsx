@@ -130,8 +130,8 @@ export default function EssencesPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <div className="min-w-0">
           <h1 className="text-3xl font-serif" style={{ color: "var(--charcoal)", fontFamily: "var(--font-gloock)" }}>
             Esanslar
           </h1>
@@ -139,13 +139,13 @@ export default function EssencesPage() {
             {essences.length} esans · {essences.filter(e => e.status === "BITTI").length} bitti · {essences.filter(e => e.status === "AZ_STOK").length} az stok
           </p>
         </div>
-        <Button onClick={openCreate} style={{ background: "var(--charcoal)", color: "var(--ivory)" }}>
+        <Button onClick={openCreate} className="shrink-0" style={{ background: "var(--charcoal)", color: "var(--ivory)" }}>
           <Plus size={14} className="mr-1.5" /> Yeni Esans
         </Button>
       </div>
 
       {/* Search + Status Filter */}
-      <div className="flex gap-3">
+      <div className="flex flex-col sm:flex-row gap-3">
         <div className="relative flex-1">
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: "var(--text-muted-warm)" }} />
           <Input
@@ -164,7 +164,7 @@ export default function EssencesPage() {
             router.replace(next ? `/admin/essences?status=${next}` : "/admin/essences")
           }}
         >
-          <SelectTrigger className="w-44" style={{ background: "#fff", borderColor: "var(--border)" }}>
+          <SelectTrigger className="w-full sm:w-44" style={{ background: "#fff", borderColor: "var(--border)" }}>
             <SelectValue placeholder="Tüm durumlar" />
           </SelectTrigger>
           <SelectContent>
@@ -195,7 +195,7 @@ export default function EssencesPage() {
             )}
           </div>
         ) : (
-          <table className="w-full text-sm">
+          <div className="overflow-x-auto"><table className="w-full text-sm min-w-[640px]">
             <thead>
               <tr style={{ borderBottom: "1px solid var(--border)", background: "var(--ivory)" }}>
                 {["Esans Adı", "Cinsiyet", "Kalan (ml)", "Başlangıç (ml)", "Min. Eşik", "Durum", "Eylemler"].map(h => (
@@ -234,7 +234,7 @@ export default function EssencesPage() {
                 </tr>
               ))}
             </tbody>
-          </table>
+          </table></div>
         )}
       </div>
 

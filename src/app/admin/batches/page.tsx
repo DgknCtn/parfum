@@ -162,8 +162,8 @@ export default function BatchesPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <div className="min-w-0">
           <h1 className="text-3xl font-serif" style={{ color: "var(--charcoal)", fontFamily: "var(--font-gloock)" }}>
             Üretim Partileri
           </h1>
@@ -171,7 +171,7 @@ export default function BatchesPage() {
             {batches.length} üretim kaydı
           </p>
         </div>
-        <Button onClick={() => setDialogOpen(true)} style={{ background: "var(--charcoal)", color: "var(--ivory)" }}>
+        <Button onClick={() => setDialogOpen(true)} className="shrink-0" style={{ background: "var(--charcoal)", color: "var(--ivory)" }}>
           <Plus size={14} className="mr-1.5" /> Yeni Üretim
         </Button>
       </div>
@@ -183,7 +183,7 @@ export default function BatchesPage() {
         ) : batches.length === 0 ? (
           <div className="py-16 text-center"><Package size={28} className="mx-auto mb-3 opacity-20" /><p className="text-sm" style={{ color: "var(--text-muted-warm)" }}>Henüz üretim kaydı yok</p><Button onClick={() => setDialogOpen(true)} variant="outline" size="sm" className="mt-3">İlk üretimi ekle</Button></div>
         ) : (
-          <table className="w-full text-sm">
+          <div className="overflow-x-auto"><table className="w-full text-sm min-w-[700px]">
             <thead>
               <tr style={{ borderBottom: "1px solid var(--border)", background: "var(--ivory)" }}>
                 {["Parfüm", "Esans", "Parti", "Tarih", "Hacim", "Oran", "Esans ml", "Eylem"].map(h => (
@@ -214,7 +214,7 @@ export default function BatchesPage() {
                 </tr>
               ))}
             </tbody>
-          </table>
+          </table></div>
         )}
       </div>
 
@@ -261,7 +261,7 @@ export default function BatchesPage() {
 
           <div className="space-y-4 mt-2 max-h-[70vh] overflow-y-auto pr-1">
             {/* Perfume + Essence */}
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <Label className="text-xs uppercase tracking-wide" style={{ color: "var(--text-muted-warm)" }}>Parfüm</Label>
                 <Select value={form.perfumeId} onValueChange={v => setForm(f => ({ ...f, perfumeId: v ?? "" }))}>
@@ -298,7 +298,7 @@ export default function BatchesPage() {
             )}
 
             {/* Batch label + date */}
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <Label className="text-xs uppercase tracking-wide" style={{ color: "var(--text-muted-warm)" }}>Parti Adı</Label>
                 <Input value={form.batchLabel} onChange={e => setForm(f => ({ ...f, batchLabel: e.target.value }))} className="mt-1" placeholder="1. Parti" />
@@ -314,7 +314,7 @@ export default function BatchesPage() {
               <p className="text-xs font-medium tracking-wide uppercase" style={{ color: "var(--gold)" }}>
                 <Calculator size={11} className="inline mr-1" /> Hesaplama
               </p>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <Label className="text-xs" style={{ color: "var(--text-muted-warm)" }}>Toplam Hacim (ml)</Label>
                   <Input type="number" value={form.totalVolumeMl} onChange={e => setForm(f => ({ ...f, totalVolumeMl: e.target.value }))} className="mt-1 font-mono" />
@@ -324,7 +324,7 @@ export default function BatchesPage() {
                   <Input type="number" value={form.essenceRatio} onChange={e => setForm(f => ({ ...f, essenceRatio: e.target.value }))} className="mt-1 font-mono" min={0} max={100} />
                 </div>
               </div>
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-3 sm:grid-cols-3 gap-2">
                 {[
                   { label: "Esans ml", field: "essenceVolumeMl", accent: true },
                   { label: "Alkol ml", field: "alcoholVolumeMl", accent: false },
@@ -344,7 +344,7 @@ export default function BatchesPage() {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <Label className="text-xs uppercase tracking-wide" style={{ color: "var(--text-muted-warm)" }}>Maliyet (₺)</Label>
                 <Input type="number" value={form.cost} onChange={e => setForm(f => ({ ...f, cost: e.target.value }))} className="mt-1" placeholder="İsteğe bağlı" />

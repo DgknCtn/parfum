@@ -95,7 +95,7 @@ export default async function DashboardPage() {
       </div>
 
       {/* Stat Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {statCards.map((card) => {
           const Icon = card.icon
           return (
@@ -143,8 +143,8 @@ export default async function DashboardPage() {
                 }}
               >
                 <AlertTriangle size={15} />
-                <span>{data.outOfStockEssences} esans stoğu tükendi. Lütfen kontrol edin.</span>
-                <ArrowRight size={13} className="ml-auto" />
+                <span className="flex-1 min-w-0">{data.outOfStockEssences} esans stoğu tükendi. Lütfen kontrol edin.</span>
+                <ArrowRight size={13} className="shrink-0 ml-auto" />
               </div>
             </Link>
           )}
@@ -179,7 +179,7 @@ export default async function DashboardPage() {
           </Link>
         </div>
 
-        <div className="rounded-xl border overflow-hidden" style={{ borderColor: "var(--border)", background: "#FFFFFF" }}>
+        <div className="rounded-xl border overflow-hidden" style={{ borderColor: "var(--border)", background: "#FFFFFF" }}><div className="overflow-x-auto">
           {data.recentBatches.length === 0 ? (
             <div className="py-12 text-center">
               <Package size={32} className="mx-auto mb-3 opacity-20" />
@@ -231,11 +231,11 @@ export default async function DashboardPage() {
               </tbody>
             </table>
           )}
-        </div>
+        </div></div>
       </div>
 
       {/* Quick actions */}
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         {[
           { label: "Yeni Parfüm", href: "/admin/perfumes", desc: "Parfüm veya reçete ekle" },
           { label: "Yeni Üretim", href: "/admin/batches", desc: "Üretim partisi kaydet" },

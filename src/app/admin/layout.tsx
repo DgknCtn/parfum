@@ -1,12 +1,9 @@
-import { Sidebar } from "@/components/admin/Sidebar"
+import { AdminShell } from "@/components/admin/AdminShell"
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen" style={{ background: "var(--ivory)" }}>
-      <Sidebar />
-      <main className="ml-56 min-h-screen">
-        <div className="max-w-6xl mx-auto px-8 py-8">{children}</div>
-      </main>
+      <AdminShell>{children}</AdminShell>
     </div>
   )
 }

@@ -202,9 +202,9 @@ export default function PerfumeDetailPage() {
         <Link href="/admin/perfumes" className="inline-flex items-center gap-1.5 text-sm mb-4 hover:opacity-70 transition-opacity" style={{ color: "var(--text-muted-warm)" }}>
           <ArrowLeft size={13} /> Parfümler
         </Link>
-        <div className="flex items-start justify-between">
-          <div>
-            <div className="flex items-center gap-3 mb-1">
+        <div className="flex items-start justify-between gap-3 flex-wrap">
+          <div className="min-w-0">
+            <div className="flex items-center gap-3 mb-1 flex-wrap">
               <h1 className="text-3xl font-serif" style={{ color: "var(--charcoal)", fontFamily: "var(--font-gloock)" }}>
                 {perfume.name}
               </h1>
@@ -214,7 +214,7 @@ export default function PerfumeDetailPage() {
               <p className="text-sm" style={{ color: "var(--text-muted-warm)" }}>{perfume.brandName}</p>
             )}
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 shrink-0">
             <Button
               variant="outline"
               size="sm"
@@ -231,7 +231,7 @@ export default function PerfumeDetailPage() {
       </div>
 
       {/* Info Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
           { label: "Toplam Üretim", value: `${perfume.totalProducedMl} ml` },
           { label: "Parti Sayısı", value: perfume.batches.length },
@@ -257,7 +257,7 @@ export default function PerfumeDetailPage() {
         <h2 className="text-lg font-serif mb-3" style={{ color: "var(--charcoal)", fontFamily: "var(--font-gloock)" }}>
           Üretim Partileri
         </h2>
-        <div className="rounded-xl border overflow-hidden" style={{ borderColor: "var(--border)", background: "#fff" }}>
+        <div className="rounded-xl border overflow-hidden" style={{ borderColor: "var(--border)", background: "#fff" }}><div className="overflow-x-auto">
           {perfume.batches.length === 0 ? (
             <div className="py-12 text-center" style={{ color: "var(--text-muted-warm)" }}>
               <FlaskConical size={24} className="mx-auto mb-2 opacity-20" />
@@ -267,7 +267,7 @@ export default function PerfumeDetailPage() {
               </Button>
             </div>
           ) : (
-            <table className="w-full text-sm">
+            <table className="w-full text-sm min-w-[640px]">
               <thead>
                 <tr className="border-b text-xs uppercase tracking-wider" style={{ borderColor: "var(--border)", color: "var(--text-muted-warm)" }}>
                   <th className="px-4 py-3 text-left font-medium">Parti</th>
@@ -320,7 +320,7 @@ export default function PerfumeDetailPage() {
               </tbody>
             </table>
           )}
-        </div>
+        </div></div>
       </div>
 
       {/* New Batch Dialog */}
@@ -330,7 +330,7 @@ export default function PerfumeDetailPage() {
             <DialogTitle>Yeni Üretim Partisi</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label>Parti Adı *</Label>
                 <Input value={batchForm.batchLabel} onChange={e => setBatchForm(f => ({ ...f, batchLabel: e.target.value }))} placeholder="1. Parti" />
@@ -351,7 +351,7 @@ export default function PerfumeDetailPage() {
                 </SelectContent>
               </Select>
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label>Toplam Hacim (ml)</Label>
                 <Input type="number" value={batchForm.totalVolumeMl} onChange={e => setBatchForm(f => ({ ...f, totalVolumeMl: e.target.value }))} />
@@ -375,7 +375,7 @@ export default function PerfumeDetailPage() {
                 )}
               </div>
             )}
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label>Maliyet (₺)</Label>
                 <Input type="number" value={batchForm.cost} onChange={e => setBatchForm(f => ({ ...f, cost: e.target.value }))} placeholder="0" />

@@ -12,6 +12,7 @@ import {
   FileSpreadsheet,
   LogOut,
   Globe,
+  X,
 } from "lucide-react"
 
 const navItems = [
@@ -22,7 +23,12 @@ const navItems = [
   { href: "/admin/import", label: "Excel İçe Aktar", icon: FileSpreadsheet },
 ]
 
-export function Sidebar() {
+interface SidebarProps {
+  open?: boolean
+  onClose?: () => void
+}
+
+export function Sidebar({ open, onClose }: SidebarProps) {
   const pathname = usePathname()
   const router = useRouter()
 
@@ -34,28 +40,46 @@ export function Sidebar() {
     router.refresh()
   }
 
+  function handleNavClick() {
+    onClose?.()
+  }
+
   return (
     <aside
-      className="fixed left-0 top-0 h-full w-56 flex flex-col z-40"
+      className={[
+        "fixed left-0 top-0 h-full w-56 flex flex-col z-40",
+        "transition-transform duration-200 ease-in-out",
+        open ? "translate-x-0" : "-translate-x-full md:translate-x-0",
+      ].join(" ")}
       style={{
         background: "var(--obsidian)",
         borderRight: "1px solid rgba(201,168,92,0.1)",
       }}
     >
       {/* Logo */}
-      <div className="px-6 py-8 border-b" style={{ borderColor: "rgba(201,168,92,0.1)" }}>
-        <div className="text-[10px] tracking-[0.4em] uppercase mb-1" style={{ color: "var(--gold-dim)" }}>
-          Atelier
+      <div className="px-6 py-8 border-b flex items-start justify-between" style={{ borderColor: "rgba(201,168,92,0.1)" }}>
+        <div>
+          <div className="text-[10px] tracking-[0.4em] uppercase mb-1" style={{ color: "var(--gold-dim)" }}>
+            Atelier
+          </div>
+          <div
+            className="text-2xl"
+            style={{ color: "var(--ivory)", fontFamily: "var(--font-gloock)", lineHeight: 1 }}
+          >
+            Parfum
+          </div>
+          <div className="text-[10px] mt-1.5 tracking-widest uppercase" style={{ color: "var(--text-muted-warm)" }}>
+            Admin Paneli
+          </div>
         </div>
-        <div
-          className="text-2xl"
-          style={{ color: "var(--ivory)", fontFamily: "var(--font-gloock)", lineHeight: 1 }}
+        {/* Close button — only visible on mobile */}
+        <button
+          onClick={onClose}
+          className="md:hidden p-1 rounded opacity-50 hover:opacity-100 transition-opacity mt-1"
+          aria-label="Menüyü kapat"
         >
-          Parfum
-        </div>
-        <div className="text-[10px] mt-1.5 tracking-widest uppercase" style={{ color: "var(--text-muted-warm)" }}>
-          Admin Paneli
-        </div>
+          <X size={16} style={{ color: "var(--ivory)" }} />
+        </button>
       </div>
 
       {/* Nav */}
@@ -67,6 +91,7 @@ export function Sidebar() {
             <Link
               key={item.href}
               href={item.href}
+              onClick={handleNavClick}
               className="flex items-center gap-3 px-3 py-2.5 rounded-md text-sm transition-all duration-150 group"
               style={{
                 background: active ? "rgba(201,168,92,0.12)" : "transparent",
@@ -94,6 +119,7 @@ export function Sidebar() {
         <Link
           href="/"
           target="_blank"
+          onClick={handleNavClick}
           className="flex items-center gap-3 px-3 py-2.5 rounded-md text-xs transition-all duration-150"
           style={{ color: "var(--text-muted-warm)" }}
         >
