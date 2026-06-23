@@ -47,7 +47,7 @@ async function getPerfumes(searchParams: SearchParams) {
       slug: true,
       latestBatchDate: true,
       batches: {
-        where: { publicVisible: true, deletedAt: null },
+        where: { deletedAt: null },
         orderBy: { productionDate: "desc" },
         take: 1,
         select: { essenceRatio: true, totalVolumeMl: true, batchLabel: true },

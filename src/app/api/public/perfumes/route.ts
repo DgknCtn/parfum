@@ -38,7 +38,7 @@ export async function GET(request: Request) {
       latestBatchDate: true,
       totalProducedMl: true,
       batches: {
-        where: { publicVisible: true, deletedAt: null },
+        where: { deletedAt: null },
         orderBy: { productionDate: "desc" },
         take: 1,
         select: {
