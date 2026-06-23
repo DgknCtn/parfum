@@ -1,5 +1,7 @@
 import Link from "next/link"
+import { Suspense } from "react"
 import { prisma } from "@/lib/prisma"
+import { SearchInput } from "@/components/public/SearchInput"
 
 const genderLabels: Record<string, string> = {
   KADIN: "Kadın",
@@ -100,6 +102,11 @@ export default async function CatalogPage({
 
       {/* Filters */}
       <section className="max-w-6xl mx-auto px-6 pb-8">
+        <div className="flex items-center gap-3 flex-wrap mb-4">
+          <Suspense fallback={null}>
+            <SearchInput defaultValue={params.q} />
+          </Suspense>
+        </div>
         <div className="flex items-center gap-2 flex-wrap">
           {[
             { label: "Tümü", gender: undefined },
@@ -135,9 +142,13 @@ export default async function CatalogPage({
               Parfüm Bulunamadı
             </p>
             <p className="text-sm" style={{ color: "var(--text-muted-warm)" }}>
-              {params.gender ? `${genderLabels[params.gender]} kategorisinde henüz parfüm yok.` : "Henüz hiç parfüm eklenmemiş."}
+              {params.q
+                ? `"${params.q}" ile eşleşen parfüm bulunamadı.`
+                : params.gender
+                  ? `${genderLabels[params.gender]} kategorisinde henüz parfüm yok.`
+                  : "Henüz hiç parfüm eklenmemiş."}
             </p>
-            {params.gender && (
+            {(params.gender || params.q) && (
               <Link href="/" className="text-sm mt-4 inline-block" style={{ color: "var(--gold)" }}>
                 Tüm koleksiyonu gör →
               </Link>

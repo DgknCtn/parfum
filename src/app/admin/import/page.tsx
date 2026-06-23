@@ -156,7 +156,7 @@ export default function ImportPage() {
               <div key={key} className="flex items-center gap-3 p-3 rounded-lg" style={{ background: "#fff", border: "1px solid var(--border)" }}>
                 <span className="text-xs w-44 shrink-0" style={{ color: "var(--charcoal)" }}>{label}</span>
                 <ArrowRight size={12} style={{ color: "var(--border)" }} />
-                <Select value={mapping[key] ?? "__none"} onValueChange={v => setMapping(m => ({ ...m, [key]: v === "__none" ? "" : v }))}>
+                <Select value={mapping[key] ?? "__none"} onValueChange={v => setMapping(m => ({ ...m, [key]: v === "__none" || !v ? "" : v }))}>
                   <SelectTrigger className="flex-1 h-8 text-xs">
                     <SelectValue placeholder="Excel sütunu seç..." />
                   </SelectTrigger>

@@ -19,6 +19,8 @@ interface Perfume {
   genderCategory: string
   publicVisible: boolean
   slug: string
+  description: string | null
+  notes: string | null
   latestBatchDate: string | null
   totalProducedMl: number
   _count?: { batches: number }
@@ -59,9 +61,9 @@ export default function PerfumesPage() {
       name: p.name,
       brandName: p.brandName ?? "",
       genderCategory: p.genderCategory,
-      description: "",
+      description: p.description ?? "",
       publicVisible: p.publicVisible,
-      notes: "",
+      notes: p.notes ?? "",
     })
     setDialogOpen(true)
   }
@@ -212,7 +214,7 @@ export default function PerfumesPage() {
             </div>
             <div>
               <Label className="text-xs uppercase tracking-wide" style={{ color: "var(--text-muted-warm)" }}>Cinsiyet</Label>
-              <Select value={form.genderCategory} onValueChange={v => setForm(f => ({ ...f, genderCategory: v }))}>
+              <Select value={form.genderCategory} onValueChange={v => setForm(f => ({ ...f, genderCategory: v ?? "BELIRTILMEMIS" }))}>
                 <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="KADIN">Kadın</SelectItem>

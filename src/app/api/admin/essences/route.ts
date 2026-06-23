@@ -57,7 +57,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json(essence, { status: 201 })
   } catch (err) {
-    if (err instanceof z.ZodError) return NextResponse.json({ error: err.errors }, { status: 400 })
+    if (err instanceof z.ZodError) return NextResponse.json({ error: err.issues }, { status: 400 })
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 }

@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Textarea } from "@/components/ui/textarea"
 import { StockBadge } from "@/components/admin/StockBadge"
 import { toast } from "sonner"
-import { Plus, Package, Trash2, AlertCircle, CheckCircle2, Calculator } from "lucide-react"
+import { Plus, Package, Trash2, AlertCircle, CheckCircle2, Calculator, Pencil } from "lucide-react"
 
 interface Batch {
   id: string
@@ -52,6 +52,28 @@ export default function BatchesPage() {
   })
 
   const [stockCheck, setStockCheck] = useState<{ ok: boolean; available: number; required: number } | null>(null)
+
+  // Edit dialog state
+  const [editDialogOpen, setEditDialogOpen] = useState(false)
+  const [editingBatch, setEditingBatch] = useState<Batch | null>(null)
+  const [editForm, setEditForm] = useState({ publicVisible: false, notes: "" })
+
+  function openEdit(b: Batch) {
+    setEditingBatch(b)
+    setEditForm({ publicVisible: b.publicVisible, notes: b.notes ?? "" })
+    setEditDialogOpen(true)
+  }
+
+  async function handleEdit() {
+    if (!editingBatch) return
+    const res = await fetch(`/api/admin/batches/${editingBatch.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ publicVisible: editForm.publicVisible, notes: editForm.notes || undefined }),
+    })
+    if (res.ok) { toast.success("Parti güncellendi"); setEditDialogOpen(false); fetchData() }
+    else toast.error("Güncelleme başarısız")
+  }
 
   const recalculate = useCallback(() => {
     const total = parseFloat(form.totalVolumeMl)
@@ -180,9 +202,14 @@ export default function BatchesPage() {
                   <td className="px-4 py-3 font-mono text-xs" style={{ color: "var(--gold)" }}>%{(b.essenceRatio * 100).toFixed(0)}</td>
                   <td className="px-4 py-3 font-mono text-xs" style={{ color: "var(--charcoal)" }}>{b.essenceVolumeMl} ml</td>
                   <td className="px-4 py-3">
-                    <button onClick={() => handleDelete(b.id)} className="p-1.5 rounded hover:bg-red-50 transition-colors">
-                      <Trash2 size={13} style={{ color: "#dc2626" }} />
-                    </button>
+                    <div className="flex items-center gap-1">
+                      <button onClick={() => openEdit(b)} className="p-1.5 rounded hover:bg-gray-100 transition-colors">
+                        <Pencil size={13} style={{ color: "var(--text-muted-warm)" }} />
+                      </button>
+                      <button onClick={() => handleDelete(b.id)} className="p-1.5 rounded hover:bg-red-50 transition-colors">
+                        <Trash2 size={13} style={{ color: "#dc2626" }} />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -190,6 +217,37 @@ export default function BatchesPage() {
           </table>
         )}
       </div>
+
+      {/* Edit Batch Dialog */}
+      <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+        <DialogContent className="max-w-sm" style={{ background: "var(--ivory)", borderColor: "var(--border)" }}>
+          <DialogHeader>
+            <DialogTitle style={{ fontFamily: "var(--font-gloock)", color: "var(--charcoal)" }}>
+              Partiyi Düzenle — {editingBatch?.batchLabel}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 mt-2">
+            <div className="space-y-1.5">
+              <Label className="text-xs uppercase tracking-wide" style={{ color: "var(--text-muted-warm)" }}>Public Görünürlük</Label>
+              <Select value={editForm.publicVisible ? "true" : "false"} onValueChange={v => setEditForm(f => ({ ...f, publicVisible: v === "true" }))}>
+                <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="true">Public</SelectItem>
+                  <SelectItem value="false">Gizli</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs uppercase tracking-wide" style={{ color: "var(--text-muted-warm)" }}>Notlar</Label>
+              <Textarea value={editForm.notes} onChange={e => setEditForm(f => ({ ...f, notes: e.target.value }))} rows={3} />
+            </div>
+            <div className="flex gap-2 justify-end pt-2">
+              <Button variant="outline" onClick={() => setEditDialogOpen(false)}>İptal</Button>
+              <Button onClick={handleEdit} style={{ background: "var(--charcoal)", color: "var(--ivory)" }}>Kaydet</Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* New Batch Dialog - Calculator Mode */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
@@ -206,7 +264,7 @@ export default function BatchesPage() {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label className="text-xs uppercase tracking-wide" style={{ color: "var(--text-muted-warm)" }}>Parfüm</Label>
-                <Select value={form.perfumeId} onValueChange={v => setForm(f => ({ ...f, perfumeId: v }))}>
+                <Select value={form.perfumeId} onValueChange={v => setForm(f => ({ ...f, perfumeId: v ?? "" }))}>
                   <SelectTrigger className="mt-1"><SelectValue placeholder="Seç..." /></SelectTrigger>
                   <SelectContent>
                     {perfumes.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
@@ -215,7 +273,7 @@ export default function BatchesPage() {
               </div>
               <div>
                 <Label className="text-xs uppercase tracking-wide" style={{ color: "var(--text-muted-warm)" }}>Esans</Label>
-                <Select value={form.essenceId} onValueChange={v => setForm(f => ({ ...f, essenceId: v }))}>
+                <Select value={form.essenceId} onValueChange={v => setForm(f => ({ ...f, essenceId: v ?? "" }))}>
                   <SelectTrigger className="mt-1"><SelectValue placeholder="Seç..." /></SelectTrigger>
                   <SelectContent>
                     {essences.map(e => (

@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -24,9 +25,16 @@ interface Essence {
 }
 
 export default function EssencesPage() {
+  const router = useRouter()
   const [essences, setEssences] = useState<Essence[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState("")
+  const [statusFilter, setStatusFilter] = useState<string>("")
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    setStatusFilter(params.get("status") ?? "")
+  }, [])
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editing, setEditing] = useState<Essence | null>(null)
   const [adjustDialogOpen, setAdjustDialogOpen] = useState(false)
@@ -114,9 +122,11 @@ export default function EssencesPage() {
     else toast.error("Güncelleme başarısız")
   }
 
-  const filtered = essences.filter((e) =>
-    e.name.toLowerCase().includes(search.toLowerCase())
-  )
+  const filtered = essences.filter((e) => {
+    const matchesSearch = e.name.toLowerCase().includes(search.toLowerCase())
+    const matchesStatus = !statusFilter || e.status === statusFilter
+    return matchesSearch && matchesStatus
+  })
 
   return (
     <div className="space-y-6">
@@ -134,16 +144,37 @@ export default function EssencesPage() {
         </Button>
       </div>
 
-      {/* Search */}
-      <div className="relative">
-        <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: "var(--text-muted-warm)" }} />
-        <Input
-          placeholder="Esans ara..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="pl-9"
-          style={{ background: "#fff", borderColor: "var(--border)" }}
-        />
+      {/* Search + Status Filter */}
+      <div className="flex gap-3">
+        <div className="relative flex-1">
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: "var(--text-muted-warm)" }} />
+          <Input
+            placeholder="Esans ara..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-9"
+            style={{ background: "#fff", borderColor: "var(--border)" }}
+          />
+        </div>
+        <Select
+          value={statusFilter || "ALL"}
+          onValueChange={(v) => {
+            const next = v === "ALL" || !v ? "" : v
+            setStatusFilter(next)
+            router.replace(next ? `/admin/essences?status=${next}` : "/admin/essences")
+          }}
+        >
+          <SelectTrigger className="w-44" style={{ background: "#fff", borderColor: "var(--border)" }}>
+            <SelectValue placeholder="Tüm durumlar" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="ALL">Tüm durumlar</SelectItem>
+            <SelectItem value="MEVCUT">Mevcut</SelectItem>
+            <SelectItem value="AZ_STOK">Az Stok</SelectItem>
+            <SelectItem value="BITTI">Bitti</SelectItem>
+            <SelectItem value="TUTARSIZ">Tutarsız</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
       {/* Table */}
@@ -222,7 +253,7 @@ export default function EssencesPage() {
             </div>
             <div>
               <Label className="text-xs uppercase tracking-wide" style={{ color: "var(--text-muted-warm)" }}>Cinsiyet</Label>
-              <Select value={form.genderCategory} onValueChange={v => setForm(f => ({ ...f, genderCategory: v }))}>
+              <Select value={form.genderCategory} onValueChange={v => setForm(f => ({ ...f, genderCategory: v ?? "BELIRTILMEMIS" }))}>
                 <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="KADIN">Kadın</SelectItem>

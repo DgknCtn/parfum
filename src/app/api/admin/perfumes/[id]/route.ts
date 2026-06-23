@@ -47,7 +47,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     const perfume = await prisma.perfume.update({ where: { id }, data })
     return NextResponse.json(perfume)
   } catch (err) {
-    if (err instanceof z.ZodError) return NextResponse.json({ error: err.errors }, { status: 400 })
+    if (err instanceof z.ZodError) return NextResponse.json({ error: err.issues }, { status: 400 })
     return NextResponse.json({ error: "Error" }, { status: 500 })
   }
 }

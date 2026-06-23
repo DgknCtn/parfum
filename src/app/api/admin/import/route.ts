@@ -131,7 +131,7 @@ export async function POST(request: Request) {
         successfulRows,
         failedRows,
         warningsCount,
-        errorReport,
+        errorReport: errorReport as never,
         completedAt: new Date(),
       },
     })

@@ -33,13 +33,13 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 
     if (data.currentVolumeMl !== undefined) {
       const diff = data.currentVolumeMl - existing.currentVolumeMl
-      updateData.status = computeStockStatus(
+      const newStatus = computeStockStatus(
         data.currentVolumeMl,
         data.minimumStockThresholdMl ?? existing.minimumStockThresholdMl
       )
 
       const essence = await prisma.$transaction(async (tx) => {
-        const e = await tx.essence.update({ where: { id }, data: updateData })
+        const e = await tx.essence.update({ where: { id }, data: { ...updateData, status: newStatus } })
         if (diff !== 0) {
           await tx.stockMovement.create({
             data: {
@@ -56,17 +56,17 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       return NextResponse.json(essence)
     }
 
-    if (updateData.minimumStockThresholdMl !== undefined) {
-      updateData.status = computeStockStatus(
-        existing.currentVolumeMl,
-        updateData.minimumStockThresholdMl
-      )
-    }
+    const finalStatus = updateData.minimumStockThresholdMl !== undefined
+      ? computeStockStatus(existing.currentVolumeMl, updateData.minimumStockThresholdMl)
+      : undefined
 
-    const essence = await prisma.essence.update({ where: { id }, data: updateData })
+    const essence = await prisma.essence.update({
+      where: { id },
+      data: finalStatus ? { ...updateData, status: finalStatus } : updateData,
+    })
     return NextResponse.json(essence)
   } catch (err) {
-    if (err instanceof z.ZodError) return NextResponse.json({ error: err.errors }, { status: 400 })
+    if (err instanceof z.ZodError) return NextResponse.json({ error: err.issues }, { status: 400 })
     return NextResponse.json({ error: "Error" }, { status: 500 })
   }
 }
