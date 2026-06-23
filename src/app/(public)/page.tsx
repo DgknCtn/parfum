@@ -164,9 +164,11 @@ export default async function CatalogPage({
               const label = genderLabels[gender]
 
               return (
-                <Link key={p.id} href={`/p/${p.slug}`}>
+                <div key={p.id} className="relative group">
+                  {/* Full-card link */}
+                  <Link href={`/p/${p.slug}`} className="absolute inset-0 z-10" aria-label={p.name} />
                   <article
-                    className="group rounded-xl overflow-hidden transition-all duration-300 hover:-translate-y-1 hover:shadow-2xl cursor-pointer"
+                    className="rounded-xl overflow-hidden transition-all duration-300 group-hover:-translate-y-1 group-hover:shadow-2xl"
                     style={{
                       background: "rgba(255,255,255,0.03)",
                       border: "1px solid rgba(255,255,255,0.06)",
@@ -252,18 +254,18 @@ export default async function CatalogPage({
                         >
                           Detayları İncele →
                         </div>
-                        <Link
-                          href={`/karsilastir?a=${p.slug}`}
-                          onClick={e => e.stopPropagation()}
-                          className="text-[10px] px-2 py-0.5 rounded border opacity-0 group-hover:opacity-60 hover:!opacity-100 transition-all"
-                          style={{ borderColor: "rgba(255,255,255,0.15)", color: "var(--text-muted-warm)" }}
-                        >
-                          ↔ Karşılaştır
-                        </Link>
                       </div>
                     </div>
                   </article>
-                </Link>
+                  {/* Compare button — sibling of article, above card link via z-20 */}
+                  <Link
+                    href={`/karsilastir?a=${p.slug}`}
+                    className="absolute bottom-4 right-4 z-20 text-[10px] px-2 py-0.5 rounded border opacity-0 group-hover:opacity-70 hover:!opacity-100 transition-all"
+                    style={{ borderColor: "rgba(255,255,255,0.2)", color: "var(--text-muted-warm)", background: "rgba(0,0,0,0.4)" }}
+                  >
+                    ↔ Karşılaştır
+                  </Link>
+                </div>
               )
             })}
           </div>
