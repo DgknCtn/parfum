@@ -67,7 +67,7 @@ export default async function CatalogPage({
   return (
     <div>
       {/* Hero */}
-      <section className="relative overflow-hidden py-24 px-6">
+      <section className="relative overflow-hidden py-14 md:py-24 px-6">
         <div
           className="absolute inset-0 opacity-20"
           style={{

@@ -148,20 +148,20 @@ export default async function PerfumeDetailPage({ params }: { params: Promise<{ 
                 }}
               >
                 {/* Batch header */}
-                <div className="flex items-center justify-between">
-                  <div>
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
                     <span
                       className="text-sm font-medium"
                       style={{ color: "var(--ivory)", fontFamily: "var(--font-gloock)" }}
                     >
                       {batch.batchLabel}
                     </span>
-                    <span className="ml-2 text-xs" style={{ color: "var(--text-muted-warm)" }}>
-                      · {new Date(batch.productionDate).toLocaleDateString("tr-TR", { year: "numeric", month: "long", day: "numeric" })}
-                    </span>
+                    <p className="text-xs mt-0.5" style={{ color: "var(--text-muted-warm)" }}>
+                      {new Date(batch.productionDate).toLocaleDateString("tr-TR", { year: "numeric", month: "long", day: "numeric" })}
+                    </p>
                   </div>
                   <span
-                    className="text-xl font-mono"
+                    className="text-xl font-mono shrink-0"
                     style={{ color: "var(--gold)", fontFamily: "var(--font-gloock)" }}
                   >
                     %{(batch.essenceRatio * 100).toFixed(0)}
@@ -175,7 +175,7 @@ export default async function PerfumeDetailPage({ params }: { params: Promise<{ 
                     <div style={{ width: `${alcoholPct}%`, background: "rgba(201,168,92,0.35)" }} />
                     <div style={{ width: `${waterPct}%`, background: "rgba(201,168,92,0.12)" }} />
                   </div>
-                  <div className="flex items-center gap-4 text-[10px]" style={{ color: "var(--text-muted-warm)" }}>
+                  <div className="flex items-center gap-3 flex-wrap text-[10px]" style={{ color: "var(--text-muted-warm)" }}>
                     <span>
                       <span style={{ color: "var(--gold)" }}>■</span> Esans {essencePct.toFixed(0)}%
                     </span>

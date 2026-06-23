@@ -24,14 +24,14 @@ export default function PublicLayout({ children }: { children: React.ReactNode }
               Parfum
             </span>
           </Link>
-          <nav className="flex items-center gap-6 text-xs tracking-wide">
-            <Link href="/?gender=KADIN" className="transition-colors hover:text-[var(--gold)]" style={{ color: "var(--text-muted-warm)" }}>
+          <nav className="flex items-center gap-4 sm:gap-6 text-xs tracking-wide">
+            <Link href="/?gender=KADIN" className="hidden sm:inline transition-colors hover:text-[var(--gold)]" style={{ color: "var(--text-muted-warm)" }}>
               Kadın
             </Link>
-            <Link href="/?gender=ERKEK" className="transition-colors hover:text-[var(--gold)]" style={{ color: "var(--text-muted-warm)" }}>
+            <Link href="/?gender=ERKEK" className="hidden sm:inline transition-colors hover:text-[var(--gold)]" style={{ color: "var(--text-muted-warm)" }}>
               Erkek
             </Link>
-            <Link href="/?gender=UNISEX" className="transition-colors hover:text-[var(--gold)]" style={{ color: "var(--text-muted-warm)" }}>
+            <Link href="/?gender=UNISEX" className="hidden sm:inline transition-colors hover:text-[var(--gold)]" style={{ color: "var(--text-muted-warm)" }}>
               Unisex
             </Link>
             <Link
