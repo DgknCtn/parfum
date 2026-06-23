@@ -44,7 +44,7 @@ export default async function PerfumeDetailPage({ params }: { params: Promise<{ 
     where: { slug, publicVisible: true },
     include: {
       batches: {
-        where: { publicVisible: true, deletedAt: null },
+        where: { deletedAt: null },
         orderBy: { productionDate: "desc" },
         select: {
           id: true,

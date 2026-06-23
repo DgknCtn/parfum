@@ -4,7 +4,7 @@ import { useState, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { toast } from "sonner"
-import { FileSpreadsheet, Upload, CheckCircle2, AlertCircle, ArrowRight } from "lucide-react"
+import { FileSpreadsheet, Upload, CheckCircle2, AlertCircle, ArrowRight, Wrench } from "lucide-react"
 import { parseExcelFile } from "@/lib/excel-parser"
 
 const DB_FIELDS = [
@@ -40,7 +40,20 @@ export default function ImportPage() {
   const [mapping, setMapping] = useState<Record<string, string>>({})
   const [result, setResult] = useState<ImportResult | null>(null)
   const [importing, setImporting] = useState(false)
+  const [migrating, setMigrating] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
+
+  async function handleMigrate() {
+    setMigrating(true)
+    const res = await fetch("/api/admin/migrate", { method: "POST" })
+    const data = await res.json()
+    setMigrating(false)
+    if (res.ok) {
+      toast.success(`Tamamlandı: ${data.brandFixed} marka ayrıştırıldı, ${data.datesFixed} tarih güncellendi`)
+    } else {
+      toast.error("Migration başarısız")
+    }
+  }
 
   async function handleFile(f: File) {
     setFile(f)
@@ -237,6 +250,32 @@ export default function ImportPage() {
           </Button>
         </div>
       )}
+
+      {/* Maintenance */}
+      <div className="pt-4 border-t" style={{ borderColor: "var(--border)" }}>
+        <p className="text-xs font-medium mb-2 uppercase tracking-wider" style={{ color: "var(--text-muted-warm)" }}>
+          Veri Bakımı
+        </p>
+        <div className="rounded-xl p-4 flex items-center justify-between gap-4" style={{ background: "#fff", border: "1px solid var(--border)" }}>
+          <div>
+            <p className="text-sm font-medium" style={{ color: "var(--charcoal)" }}>Marka ve Tarih Düzeltme</p>
+            <p className="text-xs mt-0.5" style={{ color: "var(--text-muted-warm)" }}>
+              Parfüm adlarından marka ayıklar, son üretim tarihi ve toplam ml günceller
+            </p>
+          </div>
+          <Button
+            onClick={handleMigrate}
+            disabled={migrating}
+            variant="outline"
+            size="sm"
+            className="shrink-0"
+            style={{ borderColor: "var(--gold)", color: "var(--gold)" }}
+          >
+            <Wrench size={13} className="mr-1.5" />
+            {migrating ? "Çalışıyor..." : "Düzelt"}
+          </Button>
+        </div>
+      </div>
     </div>
   )
 }

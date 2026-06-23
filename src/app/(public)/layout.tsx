@@ -34,6 +34,13 @@ export default function PublicLayout({ children }: { children: React.ReactNode }
             <Link href="/?gender=UNISEX" className="transition-colors hover:text-[var(--gold)]" style={{ color: "var(--text-muted-warm)" }}>
               Unisex
             </Link>
+            <Link
+              href="/admin"
+              className="text-[10px] tracking-[0.25em] uppercase transition-opacity opacity-25 hover:opacity-60"
+              style={{ color: "var(--text-muted-warm)" }}
+            >
+              Admin
+            </Link>
           </nav>
         </div>
       </header>

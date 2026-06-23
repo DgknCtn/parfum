@@ -99,21 +99,30 @@ export async function POST(request: Request) {
         const essenceRatio = row.esansOrani ?? (row.parfumMl && row.kullanilanEsansMl ? row.kullanilanEsansMl / row.parfumMl : 0.25)
         const prodDate = row.yapimTarihi ? new Date(row.yapimTarihi) : new Date()
 
+        const batchVolume = row.parfumMl ?? 50
         await prisma.batch.create({
           data: {
             perfumeId: perfume.id,
             essenceId: essence.id,
             batchLabel: row.partiBilgisi ?? "İçe Aktarılan Parti",
             productionDate: prodDate,
-            totalVolumeMl: row.parfumMl ?? 50,
+            totalVolumeMl: batchVolume,
             essenceRatio,
-            essenceVolumeMl: row.kullanilanEsansMl ?? (row.parfumMl ?? 50) * essenceRatio,
+            essenceVolumeMl: row.kullanilanEsansMl ?? batchVolume * essenceRatio,
             alcoholVolumeMl: row.alkolMl ?? 0,
             waterVolumeMl: row.suMl ?? 0,
             cost: row.ucret,
             notes: row.notlar,
             publicVisible: false,
             stockDeducted: true,
+          },
+        })
+
+        await prisma.perfume.update({
+          where: { id: perfume.id },
+          data: {
+            latestBatchDate: prodDate,
+            totalProducedMl: { increment: batchVolume },
           },
         })
 
