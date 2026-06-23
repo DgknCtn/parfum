@@ -48,6 +48,8 @@ model Essence {
   totalUsedMl             Float          @default(0)
   notes                   String?
   status                  StockStatus    @default(MEVCUT)
+  supplier                String?
+  pricePerMl              Float?
   createdAt               DateTime       @default(now())
   updatedAt               DateTime       @updatedAt
 
@@ -64,6 +66,10 @@ model Perfume {
   publicVisible   Boolean        @default(false)
   coverImageUrl   String?
   notes           String?
+  topNotes        String?
+  middleNotes     String?
+  baseNotes       String?
+  agingDays       Int?
   slug            String         @unique
   latestBatchDate DateTime?
   totalProducedMl Float          @default(0)

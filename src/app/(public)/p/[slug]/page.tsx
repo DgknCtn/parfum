@@ -2,6 +2,7 @@ import { notFound } from "next/navigation"
 import Link from "next/link"
 import { prisma } from "@/lib/prisma"
 import type { Metadata } from "next"
+import { QrShare } from "@/components/public/QrShare"
 
 export const revalidate = 3600
 
@@ -226,13 +227,36 @@ export default async function PerfumeDetailPage({ params }: { params: Promise<{ 
         </div>
       )}
 
+      {/* Koku Notaları */}
+      {(perfume.topNotes || perfume.middleNotes || perfume.baseNotes) && (
+        <div className="mt-12 pt-8 border-t" style={{ borderColor: "rgba(255,255,255,0.05)" }}>
+          <p className="text-xs uppercase tracking-widest mb-4" style={{ color: "var(--gold)" }}>Koku Notaları</p>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            {[
+              { label: "Üst Nota", value: perfume.topNotes, desc: "İlk izlenim" },
+              { label: "Orta Nota", value: perfume.middleNotes, desc: "Kalp notası" },
+              { label: "Alt Nota", value: perfume.baseNotes, desc: "Kalıcı iz" },
+            ].filter(n => n.value).map(({ label, value, desc }) => (
+              <div key={label} className="rounded-lg p-4" style={{ background: "rgba(201,168,92,0.04)", border: "1px solid rgba(201,168,92,0.1)" }}>
+                <p className="text-[10px] uppercase tracking-widest mb-1" style={{ color: "var(--gold)" }}>{label}</p>
+                <p className="text-sm" style={{ color: "var(--ivory)" }}>{value}</p>
+                <p className="text-[10px] mt-1" style={{ color: "var(--text-muted-warm)" }}>{desc}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Notes */}
       {perfume.notes && (
-        <div className="mt-12 pt-8 border-t" style={{ borderColor: "rgba(255,255,255,0.05)" }}>
+        <div className="mt-8 pt-8 border-t" style={{ borderColor: "rgba(255,255,255,0.05)" }}>
           <p className="text-xs uppercase tracking-widest mb-3" style={{ color: "var(--gold)" }}>Notlar</p>
           <p className="text-sm leading-relaxed" style={{ color: "var(--text-muted-warm)" }}>{perfume.notes}</p>
         </div>
       )}
+
+      {/* QR Share */}
+      <QrShare />
     </div>
   )
 }

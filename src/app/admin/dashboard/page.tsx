@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma"
 import { StockBadge } from "@/components/admin/StockBadge"
 import Link from "next/link"
 import { ArrowRight, Droplets, FlaskConical, Package, AlertTriangle, TrendingDown, CheckCircle2 } from "lucide-react"
+import { DashboardCharts } from "@/components/admin/DashboardCharts"
 
 async function getDashboardData() {
   const [
@@ -233,6 +234,9 @@ export default async function DashboardPage() {
           )}
         </div></div>
       </div>
+
+      {/* Charts */}
+      <DashboardCharts />
 
       {/* Quick actions */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">

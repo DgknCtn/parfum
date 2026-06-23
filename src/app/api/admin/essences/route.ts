@@ -11,6 +11,8 @@ const EssenceSchema = z.object({
   currentVolumeMl: z.number().min(0),
   minimumStockThresholdMl: z.number().min(0).default(5),
   notes: z.string().optional(),
+  supplier: z.string().optional(),
+  pricePerMl: z.number().min(0).optional(),
 })
 
 async function requireAuth() {

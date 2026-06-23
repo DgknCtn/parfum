@@ -11,6 +11,10 @@ const PerfumeSchema = z.object({
   description: z.string().optional(),
   publicVisible: z.boolean().default(false),
   notes: z.string().optional(),
+  topNotes: z.string().optional(),
+  middleNotes: z.string().optional(),
+  baseNotes: z.string().optional(),
+  agingDays: z.number().int().min(0).optional(),
 })
 
 async function requireAuth() {

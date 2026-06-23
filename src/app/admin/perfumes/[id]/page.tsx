@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Textarea } from "@/components/ui/textarea"
 import { StockBadge, GenderBadge } from "@/components/admin/StockBadge"
 import { toast } from "sonner"
-import { ArrowLeft, FlaskConical, Globe, EyeOff, Plus, Pencil, Trash2, Calculator } from "lucide-react"
+import { ArrowLeft, FlaskConical, Globe, EyeOff, Plus, Pencil, Trash2, Calculator, Copy, Upload, ImageIcon } from "lucide-react"
 
 interface Batch {
   id: string
@@ -37,6 +37,11 @@ interface Perfume {
   slug: string
   description: string | null
   notes: string | null
+  coverImageUrl: string | null
+  topNotes: string | null
+  middleNotes: string | null
+  baseNotes: string | null
+  agingDays: number | null
   latestBatchDate: string | null
   totalProducedMl: number
   batches: Batch[]
@@ -184,6 +189,34 @@ export default function PerfumeDetailPage() {
     else toast.error("Silinemedi")
   }
 
+  function copyBatch(batch: Batch) {
+    setBatchForm({
+      essenceId: batch.essence.id,
+      batchLabel: "",
+      productionDate: new Date().toISOString().split("T")[0],
+      totalVolumeMl: String(batch.totalVolumeMl),
+      essenceRatio: String((batch.essenceRatio * 100).toFixed(0)),
+      essenceVolumeMl: String(batch.essenceVolumeMl),
+      alcoholVolumeMl: String(batch.alcoholVolumeMl),
+      waterVolumeMl: String(batch.waterVolumeMl),
+      cost: "",
+      notes: "",
+      publicVisible: false,
+    })
+    setBatchDialogOpen(true)
+  }
+
+  async function handleImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const fd = new FormData()
+    fd.append("file", file)
+    const res = await fetch(`/api/admin/perfumes/${id}/upload-image`, { method: "POST", body: fd })
+    if (res.ok) { toast.success("Görsel yüklendi"); fetchData() }
+    else { const err = await res.json(); toast.error(err.error ?? "Yükleme başarısız") }
+    e.target.value = ""
+  }
+
   if (loading) {
     return (
       <div className="py-24 text-center" style={{ color: "var(--text-muted-warm)" }}>
@@ -245,12 +278,54 @@ export default function PerfumeDetailPage() {
         ))}
       </div>
 
-      {perfume.notes && (
-        <div className="rounded-xl border p-4 text-sm" style={{ background: "#fff", borderColor: "var(--border)", color: "var(--charcoal)" }}>
-          <p className="text-xs uppercase tracking-wider mb-1" style={{ color: "var(--text-muted-warm)" }}>Notlar</p>
-          {perfume.notes}
+      {/* Cover Image + Details */}
+      <div className="flex gap-4 flex-wrap">
+        {/* Image upload */}
+        <div className="rounded-xl border overflow-hidden shrink-0" style={{ background: "#fff", borderColor: "var(--border)", width: 140, height: 140 }}>
+          {perfume.coverImageUrl ? (
+            <div className="relative w-full h-full group">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={perfume.coverImageUrl} alt={perfume.name} className="w-full h-full object-cover" />
+              <label className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 group-hover:opacity-100 cursor-pointer transition-opacity">
+                <Upload size={20} className="text-white" />
+                <input type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
+              </label>
+            </div>
+          ) : (
+            <label className="w-full h-full flex flex-col items-center justify-center cursor-pointer gap-2 hover:bg-gray-50 transition-colors">
+              <ImageIcon size={24} style={{ color: "var(--text-muted-warm)", opacity: 0.3 }} />
+              <span className="text-[10px]" style={{ color: "var(--text-muted-warm)" }}>Görsel Yükle</span>
+              <input type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
+            </label>
+          )}
         </div>
-      )}
+
+        {/* Notes + scent notes */}
+        <div className="flex-1 min-w-0 space-y-3">
+          {perfume.notes && (
+            <div className="rounded-xl border p-4 text-sm" style={{ background: "#fff", borderColor: "var(--border)", color: "var(--charcoal)" }}>
+              <p className="text-xs uppercase tracking-wider mb-1" style={{ color: "var(--text-muted-warm)" }}>Notlar</p>
+              {perfume.notes}
+            </div>
+          )}
+          {(perfume.topNotes || perfume.middleNotes || perfume.baseNotes) && (
+            <div className="rounded-xl border p-4" style={{ background: "#fff", borderColor: "var(--border)" }}>
+              <p className="text-xs uppercase tracking-wider mb-2" style={{ color: "var(--text-muted-warm)" }}>Koku Notaları</p>
+              <div className="space-y-1 text-xs" style={{ color: "var(--charcoal)" }}>
+                {perfume.topNotes && <p><span style={{ color: "var(--text-muted-warm)" }}>Üst: </span>{perfume.topNotes}</p>}
+                {perfume.middleNotes && <p><span style={{ color: "var(--text-muted-warm)" }}>Orta: </span>{perfume.middleNotes}</p>}
+                {perfume.baseNotes && <p><span style={{ color: "var(--text-muted-warm)" }}>Alt: </span>{perfume.baseNotes}</p>}
+              </div>
+            </div>
+          )}
+          {perfume.agingDays != null && (
+            <div className="rounded-xl border p-4 text-sm" style={{ background: "#fff", borderColor: "var(--border)" }}>
+              <p className="text-xs uppercase tracking-wider mb-1" style={{ color: "var(--text-muted-warm)" }}>Dinlendirme</p>
+              <p style={{ color: "var(--charcoal)" }}>{perfume.agingDays} gün</p>
+            </div>
+          )}
+        </div>
+      </div>
 
       {/* Batches Table */}
       <div>
@@ -307,6 +382,9 @@ export default function PerfumeDetailPage() {
                     </td>
                     <td className="px-4 py-3 text-right">
                       <div className="flex items-center justify-end gap-1">
+                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => copyBatch(batch)} title="Kopyala">
+                          <Copy size={12} style={{ color: "#3b82f6" }} />
+                        </Button>
                         <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEditBatch(batch)}>
                           <Pencil size={12} />
                         </Button>

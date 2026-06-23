@@ -13,6 +13,7 @@ import {
   LogOut,
   Globe,
   X,
+  History,
 } from "lucide-react"
 
 const navItems = [
@@ -20,6 +21,7 @@ const navItems = [
   { href: "/admin/perfumes", label: "Parfümler", icon: FlaskConical },
   { href: "/admin/essences", label: "Esanslar", icon: Droplets },
   { href: "/admin/batches", label: "Üretimler", icon: Package },
+  { href: "/admin/stock-movements", label: "Stok Geçmişi", icon: History },
   { href: "/admin/import", label: "Excel İçe Aktar", icon: FileSpreadsheet },
 ]
 

@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Textarea } from "@/components/ui/textarea"
 import { StockBadge } from "@/components/admin/StockBadge"
 import { toast } from "sonner"
-import { Plus, Package, Trash2, AlertCircle, CheckCircle2, Calculator, Pencil } from "lucide-react"
+import { Plus, Package, Trash2, AlertCircle, CheckCircle2, Calculator, Pencil, Copy } from "lucide-react"
 
 interface Batch {
   id: string
@@ -62,6 +62,24 @@ export default function BatchesPage() {
     setEditingBatch(b)
     setEditForm({ publicVisible: b.publicVisible, notes: b.notes ?? "" })
     setEditDialogOpen(true)
+  }
+
+  function copyBatch(b: Batch) {
+    setForm({
+      perfumeId: b.perfume.id,
+      essenceId: b.essence.id,
+      batchLabel: "",
+      productionDate: new Date().toISOString().split("T")[0],
+      totalVolumeMl: String(b.totalVolumeMl),
+      essenceRatio: String((b.essenceRatio * 100).toFixed(0)),
+      essenceVolumeMl: String(b.essenceVolumeMl),
+      alcoholVolumeMl: String(b.alcoholVolumeMl),
+      waterVolumeMl: String(b.waterVolumeMl),
+      cost: "",
+      notes: "",
+      publicVisible: false,
+    })
+    setDialogOpen(true)
   }
 
   async function handleEdit() {
@@ -203,6 +221,9 @@ export default function BatchesPage() {
                   <td className="px-4 py-3 font-mono text-xs" style={{ color: "var(--charcoal)" }}>{b.essenceVolumeMl} ml</td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-1">
+                      <button onClick={() => copyBatch(b)} className="p-1.5 rounded hover:bg-blue-50 transition-colors" title="Kopyala">
+                        <Copy size={13} style={{ color: "#3b82f6" }} />
+                      </button>
                       <button onClick={() => openEdit(b)} className="p-1.5 rounded hover:bg-gray-100 transition-colors">
                         <Pencil size={13} style={{ color: "var(--text-muted-warm)" }} />
                       </button>

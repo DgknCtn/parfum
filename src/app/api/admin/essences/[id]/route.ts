@@ -18,6 +18,8 @@ const UpdateSchema = z.object({
   currentVolumeMl: z.number().min(0).optional(),
   minimumStockThresholdMl: z.number().min(0).optional(),
   notes: z.string().optional(),
+  supplier: z.string().optional(),
+  pricePerMl: z.number().min(0).optional(),
   adjustmentReason: z.string().optional(),
 })
 

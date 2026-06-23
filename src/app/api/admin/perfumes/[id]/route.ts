@@ -16,6 +16,10 @@ const UpdateSchema = z.object({
   description: z.string().optional(),
   publicVisible: z.boolean().optional(),
   notes: z.string().optional(),
+  topNotes: z.string().optional(),
+  middleNotes: z.string().optional(),
+  baseNotes: z.string().optional(),
+  agingDays: z.number().int().min(0).optional(),
 })
 
 export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {

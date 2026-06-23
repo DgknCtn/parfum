@@ -45,6 +45,7 @@ async function getPerfumes(searchParams: SearchParams) {
       genderCategory: true,
       description: true,
       slug: true,
+      coverImageUrl: true,
       latestBatchDate: true,
       batches: {
         where: { deletedAt: null },
@@ -171,8 +172,13 @@ export default async function CatalogPage({
                       border: "1px solid rgba(255,255,255,0.06)",
                     }}
                   >
-                    {/* Card top accent */}
-                    <div className="h-1" style={{ background: `linear-gradient(90deg, ${color}80, transparent)` }} />
+                    {/* Cover image or top accent */}
+                    {p.coverImageUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={p.coverImageUrl} alt={p.name} className="w-full h-32 object-cover" />
+                    ) : (
+                      <div className="h-1" style={{ background: `linear-gradient(90deg, ${color}80, transparent)` }} />
+                    )}
 
                     <div className="p-5 space-y-3">
                       {/* Header */}
@@ -239,12 +245,21 @@ export default async function CatalogPage({
                       )}
 
                       {/* CTA */}
-                      <div
-                        className="flex items-center justify-between pt-1 text-[11px] tracking-wider uppercase opacity-0 group-hover:opacity-100 transition-opacity"
-                        style={{ color: "var(--gold)" }}
-                      >
-                        <span>Detayları İncele</span>
-                        <span>→</span>
+                      <div className="flex items-center justify-between pt-1">
+                        <div
+                          className="text-[11px] tracking-wider uppercase opacity-0 group-hover:opacity-100 transition-opacity"
+                          style={{ color: "var(--gold)" }}
+                        >
+                          Detayları İncele →
+                        </div>
+                        <Link
+                          href={`/karsilastir?a=${p.slug}`}
+                          onClick={e => e.stopPropagation()}
+                          className="text-[10px] px-2 py-0.5 rounded border opacity-0 group-hover:opacity-60 hover:!opacity-100 transition-all"
+                          style={{ borderColor: "rgba(255,255,255,0.15)", color: "var(--text-muted-warm)" }}
+                        >
+                          ↔ Karşılaştır
+                        </Link>
                       </div>
                     </div>
                   </article>
