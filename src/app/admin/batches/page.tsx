@@ -1,182 +1,158 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Textarea } from "@/components/ui/textarea"
-import { StockBadge } from "@/components/admin/StockBadge"
+import { BatchFormDialog, type BatchLike } from "@/components/admin/BatchFormDialog"
+import { useConfirm } from "@/components/admin/ConfirmDialog"
 import { toast } from "sonner"
-import { Plus, Package, Trash2, AlertCircle, CheckCircle2, Calculator, Pencil, Copy } from "lucide-react"
+import { Plus, Package, Trash2, Pencil, Copy, Eye, EyeOff, ArrowUpDown, AlertTriangle, CheckSquare, Globe } from "lucide-react"
+import { api, fmtDate, fmtMl, fmtPct } from "@/lib/client-api"
 
-interface Batch {
-  id: string
-  batchLabel: string
-  productionDate: string
-  totalVolumeMl: number
-  essenceRatio: number
-  essenceVolumeMl: number
-  alcoholVolumeMl: number
-  waterVolumeMl: number
-  publicVisible: boolean
-  notes: string | null
+interface Batch extends BatchLike {
   perfume: { id: string; name: string; brandName: string | null }
   essence: { id: string; name: string; currentVolumeMl: number; status: string }
 }
+interface Perfume {
+  id: string
+  name: string
+  brandName: string | null
+}
+interface Essence {
+  id: string
+  name: string
+  currentVolumeMl: number
+}
 
-interface Perfume { id: string; name: string }
-interface Essence { id: string; name: string; currentVolumeMl: number; status: string }
+type SortKey = "date" | "perfume" | "ratio" | "volume"
 
 export default function BatchesPage() {
+  const confirm = useConfirm()
   const [batches, setBatches] = useState<Batch[]>([])
   const [perfumes, setPerfumes] = useState<Perfume[]>([])
   const [essences, setEssences] = useState<Essence[]>([])
   const [loading, setLoading] = useState(true)
-  const [dialogOpen, setDialogOpen] = useState(false)
-
-  const [form, setForm] = useState({
-    perfumeId: "",
-    essenceId: "",
-    batchLabel: "",
-    productionDate: new Date().toISOString().split("T")[0],
-    totalVolumeMl: "50",
-    essenceRatio: "25",
-    essenceVolumeMl: "",
-    alcoholVolumeMl: "",
-    waterVolumeMl: "",
-    cost: "",
-    notes: "",
-    publicVisible: false,
+  const [loadError, setLoadError] = useState<string | null>(null)
+  const [search, setSearch] = useState("")
+  const [visibility, setVisibility] = useState<"all" | "public" | "hidden">("all")
+  const [sort, setSort] = useState<{ key: SortKey; dir: 1 | -1 }>({ key: "date", dir: -1 })
+  const [dialog, setDialogState] = useState<{ open: boolean; key: number; mode: React.ComponentProps<typeof BatchFormDialog>["mode"] }>({
+    open: false,
+    key: 0,
+    mode: { kind: "create" },
   })
+  // Her açılışta yeni key → form sıfırdan başlar
+  const setDialog = (d: { open: boolean; mode: React.ComponentProps<typeof BatchFormDialog>["mode"] }) => setDialogState((prev) => ({ ...d, key: prev.key + 1 }))
+  const [busyId, setBusyId] = useState<string | null>(null)
+  const [selected, setSelected] = useState<Set<string>>(new Set())
 
-  const [stockCheck, setStockCheck] = useState<{ ok: boolean; available: number; required: number } | null>(null)
-
-  // Edit dialog state
-  const [editDialogOpen, setEditDialogOpen] = useState(false)
-  const [editingBatch, setEditingBatch] = useState<Batch | null>(null)
-  const [editForm, setEditForm] = useState({ publicVisible: false, notes: "" })
-
-  function openEdit(b: Batch) {
-    setEditingBatch(b)
-    setEditForm({ publicVisible: b.publicVisible, notes: b.notes ?? "" })
-    setEditDialogOpen(true)
+  async function bulkVisibility(body: { ids: string[]; publicVisible: boolean } | { scope: "publicPerfumes"; publicVisible: boolean }) {
+    const res = await api<{ updated: number }>("/api/admin/batches/bulk-visibility", { method: "PATCH", json: body })
+    if (res.ok) {
+      toast.success(`${res.data.updated} parti ${body.publicVisible ? "public yapıldı" : "gizlendi"}`)
+      setSelected(new Set())
+      fetchData()
+    } else toast.error(res.error)
   }
 
-  function copyBatch(b: Batch) {
-    setForm({
-      perfumeId: b.perfume.id,
-      essenceId: b.essence.id,
-      batchLabel: "",
-      productionDate: new Date().toISOString().split("T")[0],
-      totalVolumeMl: String(b.totalVolumeMl),
-      essenceRatio: String((b.essenceRatio * 100).toFixed(0)),
-      essenceVolumeMl: String(b.essenceVolumeMl),
-      alcoholVolumeMl: String(b.alcoholVolumeMl),
-      waterVolumeMl: String(b.waterVolumeMl),
-      cost: "",
-      notes: "",
-      publicVisible: false,
+  async function publishAllOfPublicPerfumes() {
+    const hidden = batches.filter((b) => !b.publicVisible).length
+    const ok = await confirm({
+      title: "Public parfümlerin partileri yayınlansın mı?",
+      description: `Public katalogda görünen parfümlerin gizli tüm partileri (en fazla ${hidden}) yayınlanır; reçete oranları ve parti notları ziyaretçilere görünür. Maliyet hiçbir zaman gösterilmez.`,
+      confirmLabel: "Yayınla",
     })
-    setDialogOpen(true)
+    if (ok) bulkVisibility({ scope: "publicPerfumes", publicVisible: true })
   }
 
-  async function handleEdit() {
-    if (!editingBatch) return
-    const res = await fetch(`/api/admin/batches/${editingBatch.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ publicVisible: editForm.publicVisible, notes: editForm.notes || undefined }),
+  function toggleSelect(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
     })
-    if (res.ok) { toast.success("Parti güncellendi"); setEditDialogOpen(false); fetchData() }
-    else toast.error("Güncelleme başarısız")
   }
-
-  const recalculate = useCallback(() => {
-    const total = parseFloat(form.totalVolumeMl)
-    const ratio = parseFloat(form.essenceRatio) / 100
-    if (!isNaN(total) && !isNaN(ratio)) {
-      const esansMl = total * ratio
-      const remaining = total - esansMl
-      setForm(f => ({
-        ...f,
-        essenceVolumeMl: esansMl.toFixed(1),
-        alcoholVolumeMl: (remaining * 0.85).toFixed(1),
-        waterVolumeMl: (remaining * 0.15).toFixed(1),
-      }))
-
-      const sel = essences.find(e => e.id === form.essenceId)
-      if (sel) {
-        setStockCheck({ ok: sel.currentVolumeMl >= esansMl, available: sel.currentVolumeMl, required: esansMl })
-      }
-    }
-  }, [form.totalVolumeMl, form.essenceRatio, form.essenceId, essences])
-
-  useEffect(() => { recalculate() }, [recalculate])
 
   async function fetchData() {
-    const [bRes, pRes, eRes] = await Promise.all([
-      fetch("/api/admin/batches"),
-      fetch("/api/admin/perfumes"),
-      fetch("/api/admin/essences"),
+    const [b, p, e] = await Promise.all([
+      api<Batch[]>("/api/admin/batches"),
+      api<Perfume[]>("/api/admin/perfumes"),
+      api<Essence[]>("/api/admin/essences"),
     ])
-    if (bRes.ok) setBatches(await bRes.json())
-    if (pRes.ok) setPerfumes(await pRes.json())
-    if (eRes.ok) setEssences(await eRes.json())
+    if (b.ok) setBatches(b.data)
+    if (p.ok) setPerfumes(p.data)
+    if (e.ok) setEssences(e.data)
+    setLoadError(!b.ok ? b.error : !p.ok ? p.error : !e.ok ? e.error : null)
     setLoading(false)
   }
 
-  useEffect(() => { fetchData() }, [])
+  useEffect(() => {
+    fetchData()
+  }, [])
 
-  async function handleSave() {
-    if (!form.perfumeId || !form.essenceId || !form.batchLabel) {
-      toast.error("Parfüm, esans ve parti adı zorunlu")
-      return
-    }
-
-    const payload = {
-      perfumeId: form.perfumeId,
-      essenceId: form.essenceId,
-      batchLabel: form.batchLabel,
-      productionDate: form.productionDate,
-      totalVolumeMl: parseFloat(form.totalVolumeMl),
-      essenceRatio: parseFloat(form.essenceRatio) / 100,
-      essenceVolumeMl: parseFloat(form.essenceVolumeMl),
-      alcoholVolumeMl: parseFloat(form.alcoholVolumeMl),
-      waterVolumeMl: parseFloat(form.waterVolumeMl),
-      cost: form.cost ? parseFloat(form.cost) : undefined,
-      notes: form.notes || undefined,
-      publicVisible: form.publicVisible,
-    }
-
-    const res = await fetch("/api/admin/batches", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
+  const rows = useMemo(() => {
+    const q = search.trim().toLocaleLowerCase("tr-TR")
+    const filtered = batches.filter((b) => {
+      if (visibility === "public" && !b.publicVisible) return false
+      if (visibility === "hidden" && b.publicVisible) return false
+      if (!q) return true
+      return [b.perfume.name, b.perfume.brandName ?? "", b.essence.name, b.batchLabel].some((s) => s.toLocaleLowerCase("tr-TR").includes(q))
     })
+    const val = (b: Batch) =>
+      sort.key === "date" ? new Date(b.productionDate).getTime() : sort.key === "perfume" ? b.perfume.name : sort.key === "ratio" ? b.essenceRatio : b.totalVolumeMl
+    return filtered.sort((a, b) => {
+      const va = val(a)
+      const vb = val(b)
+      const c = typeof va === "string" ? va.localeCompare(vb as string, "tr") : (va as number) - (vb as number)
+      return c * sort.dir
+    })
+  }, [batches, search, visibility, sort])
 
+  function toggleSort(key: SortKey) {
+    setSort((s) => (s.key === key ? { key, dir: (s.dir * -1) as 1 | -1 } : { key, dir: key === "perfume" ? 1 : -1 }))
+  }
+
+  async function toggleVisibility(b: Batch) {
+    setBusyId(b.id)
+    const res = await api(`/api/admin/batches/${b.id}`, { method: "PATCH", json: { publicVisible: !b.publicVisible } })
+    setBusyId(null)
     if (res.ok) {
-      const data = await res.json()
-      toast.success(`Üretim kaydedildi. Kalan esans: ${data.stockStatus.currentVolumeMl.toFixed(1)} ml`)
-      setDialogOpen(false)
-      fetchData()
-    } else {
-      const err = await res.json()
-      if (err.available !== undefined) {
-        toast.error(`Yetersiz stok! Mevcut: ${err.available.toFixed(1)} ml, Gerekli: ${err.required.toFixed(1)} ml`)
-      } else {
-        toast.error("Kayıt oluşturulamadı")
-      }
-    }
+      toast.success(b.publicVisible ? "Parti gizlendi" : "Parti public yapıldı")
+      setBatches((list) => list.map((x) => (x.id === b.id ? { ...x, publicVisible: !x.publicVisible } : x)))
+    } else toast.error(res.error)
   }
 
-  async function handleDelete(id: string) {
-    if (!confirm("Bu üretim kaydını silmek istiyor musunuz? Stok iade edilecek.")) return
-    const res = await fetch(`/api/admin/batches/${id}`, { method: "DELETE" })
-    if (res.ok) { toast.success("Üretim silindi, stok iade edildi"); fetchData() }
-    else toast.error("Silinemedi")
+  async function handleDelete(b: Batch) {
+    const ok = await confirm({
+      title: "Üretim kaydı silinsin mi?",
+      description: `${b.perfume.name} — ${b.batchLabel}. Kullanılan ${fmtMl(b.essenceVolumeMl)} ${b.essence.name} esansı stoğa iade edilecek.`,
+      confirmLabel: "Sil ve stoğu iade et",
+      destructive: true,
+    })
+    if (!ok) return
+    setBusyId(b.id)
+    const res = await api(`/api/admin/batches/${b.id}`, { method: "DELETE" })
+    setBusyId(null)
+    if (res.ok) {
+      toast.success("Üretim silindi, stok iade edildi")
+      fetchData()
+    } else toast.error(res.error)
   }
+
+  const sortTh = (k: SortKey, children: React.ReactNode) => (
+    <th className="text-left px-4 py-3 text-xs uppercase tracking-wider font-medium" style={{ color: "var(--text-muted-warm)" }} aria-sort={sort.key === k ? (sort.dir === 1 ? "ascending" : "descending") : "none"}>
+      <button type="button" onClick={() => toggleSort(k)} className="inline-flex items-center gap-1 hover:text-[var(--charcoal)]">
+        {children}
+        <ArrowUpDown size={11} aria-hidden />
+      </button>
+    </th>
+  )
+  const th = (children?: React.ReactNode) => (
+    <th className="text-left px-4 py-3 text-xs uppercase tracking-wider font-medium" style={{ color: "var(--text-muted-warm)" }}>
+      {children}
+    </th>
+  )
 
   return (
     <div className="space-y-6">
@@ -186,214 +162,208 @@ export default function BatchesPage() {
             Üretim Partileri
           </h1>
           <p className="text-sm mt-1" style={{ color: "var(--text-muted-warm)" }}>
-            {batches.length} üretim kaydı
+            {batches.length} üretim kaydı · {batches.filter((b) => b.publicVisible).length} public
           </p>
         </div>
-        <Button onClick={() => setDialogOpen(true)} className="shrink-0" style={{ background: "var(--charcoal)", color: "var(--ivory)" }}>
-          <Plus size={14} className="mr-1.5" /> Yeni Üretim
-        </Button>
+        <div className="flex gap-2 flex-wrap shrink-0">
+          {batches.some((b) => !b.publicVisible) && (
+            <Button variant="outline" size="sm" onClick={publishAllOfPublicPerfumes} style={{ borderColor: "rgba(34,197,94,0.4)", color: "#15803d" }}>
+              <Globe size={13} className="mr-1.5" /> Public parfümlerin partilerini yayınla
+            </Button>
+          )}
+          <Button onClick={() => setDialog({ open: true, mode: { kind: "create" } })} style={{ background: "var(--charcoal)", color: "var(--ivory)" }}>
+            <Plus size={14} className="mr-1.5" /> Yeni Üretim
+          </Button>
+        </div>
       </div>
 
-      {/* Batches Table */}
+      {batches.length > 0 && batches.every((b) => !b.publicVisible) && (
+        <div role="status" className="flex items-start gap-2 rounded-lg px-4 py-3 text-sm" style={{ background: "rgba(234,179,8,0.1)", border: "1px solid rgba(234,179,8,0.35)", color: "#854d0e" }}>
+          <AlertTriangle size={15} className="mt-0.5 shrink-0" />
+          Hiçbir parti public değil — public katalogda reçete oranları görünmüyor. Yayınlamak istediğin partileri seç veya &quot;Public parfümlerin partilerini yayınla&quot; butonunu kullan.
+        </div>
+      )}
+
+      {selected.size > 0 && (
+        <div className="flex items-center gap-3 px-4 py-2.5 rounded-lg flex-wrap" style={{ background: "rgba(201,168,92,0.1)", border: "1px solid rgba(201,168,92,0.3)" }}>
+          <CheckSquare size={14} style={{ color: "#8B7140" }} />
+          <span className="text-sm font-medium" style={{ color: "var(--charcoal)" }}>
+            {selected.size} parti seçildi
+          </span>
+          <div className="flex gap-2 ml-auto">
+            <button type="button" onClick={() => bulkVisibility({ ids: [...selected], publicVisible: true })} className="text-xs px-3 py-1.5 rounded border" style={{ borderColor: "rgba(34,197,94,0.4)", color: "#15803d", background: "rgba(34,197,94,0.08)" }}>
+              <Eye size={11} className="inline mr-1" /> Public Yap
+            </button>
+            <button type="button" onClick={() => bulkVisibility({ ids: [...selected], publicVisible: false })} className="text-xs px-3 py-1.5 rounded border" style={{ borderColor: "var(--border)", color: "var(--text-muted-warm)" }}>
+              <EyeOff size={11} className="inline mr-1" /> Gizle
+            </button>
+            <button type="button" onClick={() => setSelected(new Set())} className="text-xs px-2 py-1.5" style={{ color: "var(--text-muted-warm)" }}>
+              İptal
+            </button>
+          </div>
+        </div>
+      )}
+
+      <div className="flex gap-2 flex-wrap items-center">
+        <label htmlFor="batch-search" className="sr-only">
+          Partilerde ara
+        </label>
+        <Input id="batch-search" placeholder="Parfüm, esans veya parti ara..." value={search} onChange={(e) => setSearch(e.target.value)} className="max-w-xs bg-white" />
+        <div className="flex gap-1" role="group" aria-label="Görünürlük filtresi">
+          {(
+            [
+              ["all", "Tümü"],
+              ["public", "Public"],
+              ["hidden", "Gizli"],
+            ] as const
+          ).map(([v, l]) => (
+            <button
+              key={v}
+              type="button"
+              aria-pressed={visibility === v}
+              onClick={() => setVisibility(v)}
+              className="px-3 py-1.5 rounded-lg text-xs border transition-all"
+              style={{
+                background: visibility === v ? "var(--charcoal)" : "#fff",
+                color: visibility === v ? "var(--ivory)" : "var(--text-muted-warm)",
+                borderColor: visibility === v ? "var(--charcoal)" : "var(--border)",
+              }}
+            >
+              {l}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {loadError && (
+        <div role="alert" className="flex items-center gap-2 rounded-lg px-4 py-3 text-sm" style={{ background: "rgba(239,68,68,0.06)", color: "#b91c1c", border: "1px solid rgba(239,68,68,0.2)" }}>
+          <AlertTriangle size={14} /> {loadError}
+          <Button size="sm" variant="outline" className="ml-auto" onClick={fetchData}>
+            Tekrar dene
+          </Button>
+        </div>
+      )}
+
       <div className="rounded-xl border overflow-hidden" style={{ borderColor: "var(--border)", background: "#fff" }}>
         {loading ? (
-          <div className="py-16 text-center"><Package size={28} className="mx-auto mb-3 animate-pulse opacity-30" /><p className="text-sm" style={{ color: "var(--text-muted-warm)" }}>Yükleniyor...</p></div>
-        ) : batches.length === 0 ? (
-          <div className="py-16 text-center"><Package size={28} className="mx-auto mb-3 opacity-20" /><p className="text-sm" style={{ color: "var(--text-muted-warm)" }}>Henüz üretim kaydı yok</p><Button onClick={() => setDialogOpen(true)} variant="outline" size="sm" className="mt-3">İlk üretimi ekle</Button></div>
+          <div className="py-16 text-center">
+            <Package size={28} className="mx-auto mb-3 animate-pulse opacity-30" />
+            <p className="text-sm" style={{ color: "var(--text-muted-warm)" }}>
+              Yükleniyor...
+            </p>
+          </div>
+        ) : rows.length === 0 ? (
+          <div className="py-16 text-center">
+            <Package size={28} className="mx-auto mb-3 opacity-20" />
+            <p className="text-sm" style={{ color: "var(--text-muted-warm)" }}>
+              {batches.length ? "Filtreye uygun parti yok" : "Henüz üretim kaydı yok"}
+            </p>
+            {!batches.length && (
+              <Button onClick={() => setDialog({ open: true, mode: { kind: "create" } })} variant="outline" size="sm" className="mt-3">
+                İlk üretimi ekle
+              </Button>
+            )}
+          </div>
         ) : (
-          <div className="overflow-x-auto"><table className="w-full text-sm min-w-[700px]">
-            <thead>
-              <tr style={{ borderBottom: "1px solid var(--border)", background: "var(--ivory)" }}>
-                {["Parfüm", "Esans", "Parti", "Tarih", "Hacim", "Oran", "Esans ml", "Eylem"].map(h => (
-                  <th key={h} className="text-left px-4 py-3 text-xs uppercase tracking-wider font-medium" style={{ color: "var(--text-muted-warm)" }}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {batches.map((b, i) => (
-                <tr key={b.id} style={{ borderBottom: i < batches.length - 1 ? "1px solid var(--border)" : "none" }}>
-                  <td className="px-4 py-3 font-medium" style={{ color: "var(--charcoal)" }}>{b.perfume.name}</td>
-                  <td className="px-4 py-3 text-xs" style={{ color: "var(--text-muted-warm)" }}>{b.essence.name}</td>
-                  <td className="px-4 py-3 text-xs" style={{ color: "var(--charcoal)" }}>{b.batchLabel}</td>
-                  <td className="px-4 py-3 text-xs" style={{ color: "var(--text-muted-warm)" }}>{new Date(b.productionDate).toLocaleDateString("tr-TR")}</td>
-                  <td className="px-4 py-3 font-mono text-xs" style={{ color: "var(--charcoal)" }}>{b.totalVolumeMl} ml</td>
-                  <td className="px-4 py-3 font-mono text-xs" style={{ color: "var(--gold)" }}>%{(b.essenceRatio * 100).toFixed(0)}</td>
-                  <td className="px-4 py-3 font-mono text-xs" style={{ color: "var(--charcoal)" }}>{b.essenceVolumeMl} ml</td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-1">
-                      <button onClick={() => copyBatch(b)} className="p-1.5 rounded hover:bg-blue-50 transition-colors" title="Kopyala">
-                        <Copy size={13} style={{ color: "#3b82f6" }} />
-                      </button>
-                      <button onClick={() => openEdit(b)} className="p-1.5 rounded hover:bg-gray-100 transition-colors">
-                        <Pencil size={13} style={{ color: "var(--text-muted-warm)" }} />
-                      </button>
-                      <button onClick={() => handleDelete(b.id)} className="p-1.5 rounded hover:bg-red-50 transition-colors">
-                        <Trash2 size={13} style={{ color: "#dc2626" }} />
-                      </button>
-                    </div>
-                  </td>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm min-w-[760px]">
+              <thead>
+                <tr style={{ borderBottom: "1px solid var(--border)", background: "var(--ivory)" }}>
+                  <th className="px-4 py-3 w-10">
+                    <input
+                      type="checkbox"
+                      aria-label="Görünen tüm partileri seç"
+                      className="accent-[var(--gold)]"
+                      checked={rows.length > 0 && rows.every((r) => selected.has(r.id))}
+                      onChange={() => setSelected(rows.every((r) => selected.has(r.id)) ? new Set() : new Set(rows.map((r) => r.id)))}
+                    />
+                  </th>
+                  {sortTh("perfume", "Parfüm")}
+                  {th("Esans")}
+                  {th("Parti")}
+                  {sortTh("date", "Tarih")}
+                  {sortTh("volume", "Hacim")}
+                  {sortTh("ratio", "Oran")}
+                  {th("Esans ml")}
+                  {th("Görünürlük")}
+                  {th(<span className="sr-only">Eylemler</span>)}
                 </tr>
-              ))}
-            </tbody>
-          </table></div>
+              </thead>
+              <tbody>
+                {rows.map((b, i) => (
+                  <tr key={b.id} style={{ borderBottom: i < rows.length - 1 ? "1px solid var(--border)" : "none", opacity: busyId === b.id ? 0.5 : 1, background: selected.has(b.id) ? "rgba(201,168,92,0.04)" : undefined }}>
+                    <td className="px-4 py-3">
+                      <input type="checkbox" aria-label={`${b.perfume.name} ${b.batchLabel} seç`} className="accent-[var(--gold)]" checked={selected.has(b.id)} onChange={() => toggleSelect(b.id)} />
+                    </td>
+                    <td className="px-4 py-3 font-medium" style={{ color: "var(--charcoal)" }}>
+                      {b.perfume.name}
+                      {b.perfume.brandName && (
+                        <span className="block text-[11px] font-normal" style={{ color: "var(--text-muted-warm)" }}>
+                          {b.perfume.brandName}
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-xs" style={{ color: "var(--text-muted-warm)" }}>
+                      {b.essence.name}
+                    </td>
+                    <td className="px-4 py-3 text-xs" style={{ color: "var(--charcoal)" }}>
+                      {b.batchLabel}
+                    </td>
+                    <td className="px-4 py-3 text-xs" style={{ color: b.productionDateUnknown ? "#854d0e" : "var(--text-muted-warm)" }}>
+                      {fmtDate(b.productionDate, b.productionDateUnknown)}
+                    </td>
+                    <td className="px-4 py-3 font-mono text-xs" style={{ color: "var(--charcoal)" }}>
+                      {fmtMl(b.totalVolumeMl)}
+                    </td>
+                    <td className="px-4 py-3 font-mono text-xs" style={{ color: "#8B7140" }}>
+                      {fmtPct(b.essenceRatio)}
+                    </td>
+                    <td className="px-4 py-3 font-mono text-xs" style={{ color: "var(--charcoal)" }}>
+                      {fmtMl(b.essenceVolumeMl)}
+                    </td>
+                    <td className="px-4 py-3">
+                      <button
+                        type="button"
+                        onClick={() => toggleVisibility(b)}
+                        disabled={busyId === b.id}
+                        className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded border"
+                        style={b.publicVisible ? { color: "#15803d", borderColor: "rgba(34,197,94,0.35)", background: "rgba(34,197,94,0.08)" } : { color: "var(--text-muted-warm)", borderColor: "var(--border)" }}
+                        aria-label={`${b.batchLabel}: ${b.publicVisible ? "public — gizlemek için tıkla" : "gizli — yayınlamak için tıkla"}`}
+                      >
+                        {b.publicVisible ? <Eye size={11} /> : <EyeOff size={11} />}
+                        {b.publicVisible ? "Public" : "Gizli"}
+                      </button>
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-1">
+                        <button type="button" onClick={() => setDialog({ open: true, mode: { kind: "copy", from: b } })} className="p-1.5 rounded hover:bg-blue-50" aria-label={`${b.batchLabel} reçetesini kopyala`} title="Kopyala">
+                          <Copy size={13} style={{ color: "#1d4ed8" }} />
+                        </button>
+                        <button type="button" onClick={() => setDialog({ open: true, mode: { kind: "edit", batch: b } })} className="p-1.5 rounded hover:bg-gray-100" aria-label={`${b.batchLabel} partisini düzenle`} title="Düzenle">
+                          <Pencil size={13} style={{ color: "var(--text-muted-warm)" }} />
+                        </button>
+                        <button type="button" onClick={() => handleDelete(b)} disabled={busyId === b.id} className="p-1.5 rounded hover:bg-red-50" aria-label={`${b.batchLabel} partisini sil`} title="Sil">
+                          <Trash2 size={13} style={{ color: "#b91c1c" }} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
 
-      {/* Edit Batch Dialog */}
-      <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
-        <DialogContent className="max-w-sm" style={{ background: "var(--ivory)", borderColor: "var(--border)" }}>
-          <DialogHeader>
-            <DialogTitle style={{ fontFamily: "var(--font-gloock)", color: "var(--charcoal)" }}>
-              Partiyi Düzenle — {editingBatch?.batchLabel}
-            </DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 mt-2">
-            <div className="space-y-1.5">
-              <Label className="text-xs uppercase tracking-wide" style={{ color: "var(--text-muted-warm)" }}>Public Görünürlük</Label>
-              <Select value={editForm.publicVisible ? "true" : "false"} onValueChange={v => setEditForm(f => ({ ...f, publicVisible: v === "true" }))}>
-                <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="true">Public</SelectItem>
-                  <SelectItem value="false">Gizli</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs uppercase tracking-wide" style={{ color: "var(--text-muted-warm)" }}>Notlar</Label>
-              <Textarea value={editForm.notes} onChange={e => setEditForm(f => ({ ...f, notes: e.target.value }))} rows={3} />
-            </div>
-            <div className="flex gap-2 justify-end pt-2">
-              <Button variant="outline" onClick={() => setEditDialogOpen(false)}>İptal</Button>
-              <Button onClick={handleEdit} style={{ background: "var(--charcoal)", color: "var(--ivory)" }}>Kaydet</Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* New Batch Dialog - Calculator Mode */}
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-lg" style={{ background: "var(--ivory)", borderColor: "var(--border)" }}>
-          <DialogHeader>
-            <DialogTitle style={{ fontFamily: "var(--font-gloock)", color: "var(--charcoal)" }}>
-              <Calculator size={16} className="inline mr-2" style={{ color: "var(--gold)" }} />
-              Yeni Üretim
-            </DialogTitle>
-          </DialogHeader>
-
-          <div className="space-y-4 mt-2 max-h-[70vh] overflow-y-auto pr-1">
-            {/* Perfume + Essence */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <Label className="text-xs uppercase tracking-wide" style={{ color: "var(--text-muted-warm)" }}>Parfüm</Label>
-                <Select value={form.perfumeId} onValueChange={v => setForm(f => ({ ...f, perfumeId: v ?? "" }))}>
-                  <SelectTrigger className="mt-1"><SelectValue placeholder="Seç..." /></SelectTrigger>
-                  <SelectContent>
-                    {perfumes.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label className="text-xs uppercase tracking-wide" style={{ color: "var(--text-muted-warm)" }}>Esans</Label>
-                <Select value={form.essenceId} onValueChange={v => setForm(f => ({ ...f, essenceId: v ?? "" }))}>
-                  <SelectTrigger className="mt-1"><SelectValue placeholder="Seç..." /></SelectTrigger>
-                  <SelectContent>
-                    {essences.map(e => (
-                      <SelectItem key={e.id} value={e.id}>
-                        {e.name} ({e.currentVolumeMl.toFixed(0)} ml)
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            {/* Stock check banner */}
-            {stockCheck && (
-              <div className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs ${stockCheck.ok ? "text-green-700" : "text-red-600"}`}
-                style={{ background: stockCheck.ok ? "rgba(34,197,94,0.08)" : "rgba(239,68,68,0.08)", border: `1px solid ${stockCheck.ok ? "rgba(34,197,94,0.2)" : "rgba(239,68,68,0.2)"}` }}>
-                {stockCheck.ok ? <CheckCircle2 size={13} /> : <AlertCircle size={13} />}
-                {stockCheck.ok
-                  ? `Stok yeterli. Mevcut: ${stockCheck.available.toFixed(1)} ml`
-                  : `Yetersiz stok! Mevcut: ${stockCheck.available.toFixed(1)} ml, Gerekli: ${stockCheck.required.toFixed(1)} ml`}
-              </div>
-            )}
-
-            {/* Batch label + date */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <Label className="text-xs uppercase tracking-wide" style={{ color: "var(--text-muted-warm)" }}>Parti Adı</Label>
-                <Input value={form.batchLabel} onChange={e => setForm(f => ({ ...f, batchLabel: e.target.value }))} className="mt-1" placeholder="1. Parti" />
-              </div>
-              <div>
-                <Label className="text-xs uppercase tracking-wide" style={{ color: "var(--text-muted-warm)" }}>Yapım Tarihi</Label>
-                <Input type="date" value={form.productionDate} onChange={e => setForm(f => ({ ...f, productionDate: e.target.value }))} className="mt-1" />
-              </div>
-            </div>
-
-            {/* Calculator section */}
-            <div className="rounded-lg p-4 space-y-3" style={{ background: "rgba(201,168,92,0.06)", border: "1px solid rgba(201,168,92,0.2)" }}>
-              <p className="text-xs font-medium tracking-wide uppercase" style={{ color: "var(--gold)" }}>
-                <Calculator size={11} className="inline mr-1" /> Hesaplama
-              </p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <Label className="text-xs" style={{ color: "var(--text-muted-warm)" }}>Toplam Hacim (ml)</Label>
-                  <Input type="number" value={form.totalVolumeMl} onChange={e => setForm(f => ({ ...f, totalVolumeMl: e.target.value }))} className="mt-1 font-mono" />
-                </div>
-                <div>
-                  <Label className="text-xs" style={{ color: "var(--text-muted-warm)" }}>Esans Oranı (%)</Label>
-                  <Input type="number" value={form.essenceRatio} onChange={e => setForm(f => ({ ...f, essenceRatio: e.target.value }))} className="mt-1 font-mono" min={0} max={100} />
-                </div>
-              </div>
-              <div className="grid grid-cols-3 sm:grid-cols-3 gap-2">
-                {[
-                  { label: "Esans ml", field: "essenceVolumeMl", accent: true },
-                  { label: "Alkol ml", field: "alcoholVolumeMl", accent: false },
-                  { label: "Su ml", field: "waterVolumeMl", accent: false },
-                ].map(({ label, field, accent }) => (
-                  <div key={field}>
-                    <Label className="text-xs" style={{ color: accent ? "var(--gold)" : "var(--text-muted-warm)" }}>{label}</Label>
-                    <Input
-                      type="number"
-                      value={form[field as keyof typeof form] as string}
-                      onChange={e => setForm(f => ({ ...f, [field]: e.target.value }))}
-                      className="mt-1 font-mono text-sm"
-                      style={{ borderColor: accent ? "rgba(201,168,92,0.4)" : undefined }}
-                    />
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <Label className="text-xs uppercase tracking-wide" style={{ color: "var(--text-muted-warm)" }}>Maliyet (₺)</Label>
-                <Input type="number" value={form.cost} onChange={e => setForm(f => ({ ...f, cost: e.target.value }))} className="mt-1" placeholder="İsteğe bağlı" />
-              </div>
-              <div className="flex items-end pb-1">
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input type="checkbox" checked={form.publicVisible} onChange={e => setForm(f => ({ ...f, publicVisible: e.target.checked }))} className="accent-[var(--gold)]" />
-                  <span className="text-xs" style={{ color: "var(--text-muted-warm)" }}>Public göster</span>
-                </label>
-              </div>
-            </div>
-
-            <div>
-              <Label className="text-xs uppercase tracking-wide" style={{ color: "var(--text-muted-warm)" }}>Notlar</Label>
-              <Textarea value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} className="mt-1" rows={2} />
-            </div>
-
-            <Button
-              onClick={handleSave}
-              disabled={stockCheck !== null && !stockCheck.ok}
-              className="w-full"
-              style={{ background: "var(--charcoal)", color: "var(--ivory)" }}
-            >
-              Üretimi Kaydet & Stoğu Düş
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+      <BatchFormDialog
+        key={dialog.key}
+        open={dialog.open}
+        onOpenChange={(o) => setDialogState((d) => ({ ...d, open: o }))}
+        mode={dialog.mode}
+        perfumes={perfumes}
+        essences={essences}
+        onSaved={fetchData}
+      />
     </div>
   )
 }

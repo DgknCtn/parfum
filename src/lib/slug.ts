@@ -12,3 +12,18 @@ export function generateSlug(name: string): string {
     .replace(/\s+/g, "-")
     .replace(/-+/g, "-")
 }
+
+/** Benzersiz slug ile kayıt oluşturur: unique çakışmasında (P2002) kısa rastgele ekle tekrar dener. */
+export async function createWithUniqueSlug<T>(name: string, create: (slug: string) => Promise<T>): Promise<T> {
+  const base = generateSlug(name) || "parfum"
+  for (let i = 0; i < 5; i++) {
+    const slug = i === 0 ? base : `${base}-${Math.random().toString(36).slice(2, 6)}`
+    try {
+      return await create(slug)
+    } catch (e) {
+      if ((e as { code?: string })?.code === "P2002") continue
+      throw e
+    }
+  }
+  return create(`${base}-${Date.now()}`)
+}

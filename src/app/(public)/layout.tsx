@@ -1,8 +1,13 @@
 import Link from "next/link"
+import { getCatalogSettings } from "@/lib/settings"
 
-export default function PublicLayout({ children }: { children: React.ReactNode }) {
+export default async function PublicLayout({ children }: { children: React.ReactNode }) {
+  const settings = await getCatalogSettings()
   return (
     <div className="min-h-screen" style={{ background: "var(--obsidian)" }}>
+      <a href="#icerik" className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[60] focus:px-3 focus:py-2 focus:rounded focus:bg-[var(--gold)] focus:text-[var(--obsidian)]">
+        İçeriğe geç
+      </a>
       {/* Navbar */}
       <header
         className="sticky top-0 z-50 border-b"
@@ -12,8 +17,8 @@ export default function PublicLayout({ children }: { children: React.ReactNode }
           borderColor: "rgba(201,168,92,0.1)",
         }}
       >
-        <div className="max-w-6xl mx-auto px-6 h-14 flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-2">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between gap-3">
+          <Link href="/" className="flex items-center gap-2 shrink-0" aria-label="Atelier Parfum ana sayfa">
             <span className="text-[10px] tracking-[0.35em] uppercase" style={{ color: "var(--gold)" }}>
               Atelier
             </span>
@@ -24,29 +29,27 @@ export default function PublicLayout({ children }: { children: React.ReactNode }
               Parfum
             </span>
           </Link>
-          <nav className="flex items-center gap-4 sm:gap-6 text-xs tracking-wide">
-            <Link href="/?gender=KADIN" className="hidden sm:inline transition-colors hover:text-[var(--gold)]" style={{ color: "var(--text-muted-warm)" }}>
-              Kadın
-            </Link>
-            <Link href="/?gender=ERKEK" className="hidden sm:inline transition-colors hover:text-[var(--gold)]" style={{ color: "var(--text-muted-warm)" }}>
-              Erkek
-            </Link>
-            <Link href="/?gender=UNISEX" className="hidden sm:inline transition-colors hover:text-[var(--gold)]" style={{ color: "var(--text-muted-warm)" }}>
-              Unisex
-            </Link>
-            <Link
-              href="/admin"
-              className="text-[10px] tracking-[0.25em] uppercase transition-opacity opacity-25 hover:opacity-60"
-              style={{ color: "var(--text-muted-warm)" }}
-            >
-              Admin
-            </Link>
+          <nav aria-label="Kategoriler" className="flex items-center gap-4 sm:gap-6 text-xs tracking-wide">
+            {[
+              ["KADIN", "Kadın"],
+              ["ERKEK", "Erkek"],
+              ["UNISEX", "Unisex"],
+            ].map(([value, label]) => (
+              <Link
+                key={value}
+                href={`/?gender=${value}`}
+                className="py-2 transition-colors hover:text-[var(--gold)] focus-visible:text-[var(--gold)]"
+                style={{ color: "var(--text-muted-warm)" }}
+              >
+                {label}
+              </Link>
+            ))}
           </nav>
         </div>
       </header>
 
       {/* Page content */}
-      <main>{children}</main>
+      <main id="icerik">{children}</main>
 
       {/* Footer */}
       <footer
@@ -61,7 +64,7 @@ export default function PublicLayout({ children }: { children: React.ReactNode }
             Atelier Parfum
           </div>
           <p className="text-xs" style={{ color: "var(--text-muted-warm)" }}>
-            El yapımı parfüm koleksiyonu · Tüm reçeteler özgün formülasyondur
+            {settings.footerText}
           </p>
         </div>
       </footer>

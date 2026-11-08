@@ -1,65 +1,73 @@
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
-import { createClient } from "@/lib/supabase/server"
-import { computeStockStatus } from "@/lib/stock-calculator"
+import { requireAdmin, actorOf } from "@/lib/auth"
+import { apiError } from "@/lib/api"
+import { EssenceFields } from "@/lib/schemas"
+import { computeStockStatus, round2 } from "@/lib/stock-calculator"
+import { findInconsistentEssences } from "@/lib/stock-service"
+import { logActivity } from "@/lib/activity"
 import { z } from "zod"
 
-const EssenceSchema = z.object({
-  name: z.string().min(1),
-  genderCategory: z.enum(["KADIN", "ERKEK", "UNISEX", "BELIRTILMEMIS"]).default("BELIRTILMEMIS"),
-  initialVolumeMl: z.number().positive(),
-  currentVolumeMl: z.number().min(0),
-  minimumStockThresholdMl: z.number().min(0).default(5),
-  notes: z.string().optional(),
-  supplier: z.string().optional(),
-  pricePerMl: z.number().min(0).optional(),
+const CreateSchema = EssenceFields.extend({
+  currentVolumeMl: z.number().finite().min(0).max(100_000).optional(),
+  minimumStockThresholdMl: z.number().finite().min(0).max(100_000).default(5),
+  genderCategory: EssenceFields.shape.genderCategory.default("BELIRTILMEMIS"),
 })
-
-async function requireAuth() {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) throw new Error("Unauthorized")
-  return user
-}
 
 export async function GET() {
   try {
-    await requireAuth()
-    const essences = await prisma.essence.findMany({
-      orderBy: { name: "asc" },
-      include: { _count: { select: { batches: true } } },
-    })
-    return NextResponse.json(essences)
-  } catch {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    await requireAdmin()
+    const [essences, inconsistent] = await Promise.all([
+      prisma.essence.findMany({
+        where: { deletedAt: null },
+        orderBy: { name: "asc" },
+        include: { _count: { select: { batches: { where: { deletedAt: null } } } } },
+      }),
+      findInconsistentEssences(),
+    ])
+    const diffs = new Map(inconsistent.map((e) => [e.id, e.diffMl]))
+    return NextResponse.json(essences.map((e) => ({ ...e, ledgerDiffMl: diffs.get(e.id) ?? 0 })))
+  } catch (err) {
+    return apiError(err)
   }
 }
 
 export async function POST(request: Request) {
   try {
-    const user = await requireAuth()
-    const body = await request.json()
-    const data = EssenceSchema.parse(body)
-
-    const status = computeStockStatus(data.currentVolumeMl, data.minimumStockThresholdMl)
+    const user = await requireAdmin()
+    const actor = actorOf(user)
+    const data = CreateSchema.parse(await request.json())
+    const current = round2(data.currentVolumeMl ?? data.initialVolumeMl)
+    const status = computeStockStatus(current, data.minimumStockThresholdMl)
 
     const essence = await prisma.$transaction(async (tx) => {
-      const e = await tx.essence.create({ data: { ...data, status } })
-      await tx.stockMovement.create({
+      const e = await tx.essence.create({
         data: {
-          essenceId: e.id,
-          movementType: "initial_import",
-          quantityMl: data.currentVolumeMl,
-          reason: "İlk stok girişi",
-          createdBy: user.email ?? user.id,
+          name: data.name,
+          genderCategory: data.genderCategory,
+          initialVolumeMl: round2(data.initialVolumeMl),
+          currentVolumeMl: current,
+          minimumStockThresholdMl: data.minimumStockThresholdMl,
+          notes: data.notes || null,
+          supplier: data.supplier || null,
+          pricePerMl: data.pricePerMl ?? null,
+          status,
         },
+      })
+      await tx.stockMovement.create({
+        data: { essenceId: e.id, movementType: "initial_import", quantityMl: current, reason: "İlk stok girişi", createdBy: actor },
+      })
+      await logActivity(tx, {
+        action: "essence_created",
+        entityType: "essence",
+        entityId: e.id,
+        message: `${e.name} esansı ${current} ml stokla eklendi.`,
+        actor,
       })
       return e
     })
-
     return NextResponse.json(essence, { status: 201 })
   } catch (err) {
-    if (err instanceof z.ZodError) return NextResponse.json({ error: err.issues }, { status: 400 })
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    return apiError(err)
   }
 }

@@ -132,6 +132,14 @@
   }
 }
 
+/* Admin (açık zemin): soluk metin kontrastı WCAG AA (≥4.5:1) */
+/* :has → portal ile body altına açılan diyaloglar da etkilenir */
+:root:has(.admin-theme),
+.admin-theme {
+  --text-muted-warm: #675e50;
+  --muted-foreground: #675e50;
+}
+
 /* Utility classes */
 .font-serif { font-family: var(--font-gloock), Georgia, serif; }
 .text-gold { color: var(--gold); }

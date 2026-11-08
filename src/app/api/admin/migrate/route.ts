@@ -1,83 +1,60 @@
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
-import { createClient } from "@/lib/supabase/server"
+import { requireAdmin, actorOf } from "@/lib/auth"
+import { apiError } from "@/lib/api"
+import { splitBrand } from "@/lib/import-service"
+import { recomputePerfumeAggregates } from "@/lib/stock-service"
+import { logActivity } from "@/lib/activity"
+import { revalidateCatalog } from "@/lib/revalidate"
 
+/**
+ * Veri bakımı: "Marka - Ad" biçimindeki adlardan markayı ayırır ve toplam üretim / son üretim
+ * tarihini partilerden yeniden hesaplar. Slug'lar DEĞİŞTİRİLMEZ (paylaşılmış linkler/QR'lar bozulmasın).
+ */
 export async function POST() {
   try {
-    const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-
+    const user = await requireAdmin()
     const perfumes = await prisma.perfume.findMany({
-      include: {
-        batches: {
-          where: { deletedAt: null },
-          select: { productionDate: true, totalVolumeMl: true },
-        },
-      },
+      where: { deletedAt: null },
+      select: { id: true, name: true, brandName: true, totalProducedMl: true, latestBatchDate: true },
     })
 
     let brandFixed = 0
-    let datesFixed = 0
-
-    for (const perfume of perfumes) {
-      const updates: Record<string, unknown> = {}
-      let newName: string | undefined
-
-      // Extract brand from name: "Christian Dior - Sauvage" → brand="Christian Dior", name="Sauvage"
-      if (!perfume.brandName && perfume.name.includes(" - ")) {
-        const idx = perfume.name.indexOf(" - ")
-        updates.brandName = perfume.name.slice(0, idx).trim()
-        newName = perfume.name.slice(idx + 3).trim()
-        updates.name = newName
-        // Regenerate slug from new name
-        const newSlug = newName
-          .toLowerCase()
-          .replace(/ğ/g, "g").replace(/ü/g, "u").replace(/ş/g, "s")
-          .replace(/ı/g, "i").replace(/ö/g, "o").replace(/ç/g, "c")
-          .replace(/[^a-z0-9]+/g, "-")
-          .replace(/^-|-$/g, "")
-        // Only update slug if not taken by another perfume
-        const taken = await prisma.perfume.findFirst({
-          where: { slug: newSlug, id: { not: perfume.id } },
-        })
-        if (!taken) updates.slug = newSlug
-        brandFixed++
-      }
-
-      // Sync latestBatchDate and totalProducedMl from batches
-      if (perfume.batches.length > 0) {
-        const sorted = [...perfume.batches].sort(
-          (a, b) => new Date(b.productionDate).getTime() - new Date(a.productionDate).getTime()
-        )
-        const latestDate = sorted[0].productionDate
-        const totalMl = perfume.batches.reduce((sum, b) => sum + b.totalVolumeMl, 0)
-
-        const needsDateUpdate =
-          !perfume.latestBatchDate ||
-          new Date(perfume.latestBatchDate).getTime() !== new Date(latestDate).getTime()
-        const needsMlUpdate = perfume.totalProducedMl !== totalMl
-
-        if (needsDateUpdate || needsMlUpdate) {
-          updates.latestBatchDate = latestDate
-          updates.totalProducedMl = totalMl
-          datesFixed++
+    await prisma.$transaction(
+      async (tx) => {
+        for (const p of perfumes) {
+          if (!p.brandName) {
+            const { brand, name } = splitBrand(p.name)
+            if (brand) {
+              await tx.perfume.update({ where: { id: p.id }, data: { brandName: brand, name } })
+              brandFixed++
+            }
+          }
+          await recomputePerfumeAggregates(tx, p.id)
         }
-      }
+      },
+      { timeout: 60_000, maxWait: 10_000 }
+    )
 
-      if (Object.keys(updates).length > 0) {
-        await prisma.perfume.update({ where: { id: perfume.id }, data: updates })
-      }
-    }
-
-    return NextResponse.json({
-      success: true,
-      brandFixed,
-      datesFixed,
-      total: perfumes.length,
+    const after = await prisma.perfume.findMany({
+      where: { id: { in: perfumes.map((p) => p.id) } },
+      select: { id: true, totalProducedMl: true, latestBatchDate: true },
     })
+    const before = new Map(perfumes.map((p) => [p.id, p]))
+    const datesFixed = after.filter((a) => {
+      const b = before.get(a.id)!
+      return b.totalProducedMl !== a.totalProducedMl || b.latestBatchDate?.getTime() !== a.latestBatchDate?.getTime()
+    }).length
+
+    await logActivity(prisma, {
+      action: "data_migration_run",
+      entityType: "system",
+      message: `Veri bakımı: ${brandFixed} marka ayrıştırıldı, ${datesFixed} parfümün toplam/tarih bilgisi güncellendi.`,
+      actor: actorOf(user),
+    })
+    revalidateCatalog()
+    return NextResponse.json({ success: true, brandFixed, datesFixed, total: perfumes.length })
   } catch (err) {
-    console.error(err)
-    return NextResponse.json({ error: "Migration failed" }, { status: 500 })
+    return apiError(err)
   }
 }

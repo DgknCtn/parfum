@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { History, ArrowUpCircle, ArrowDownCircle, SlidersHorizontal, RefreshCw, Trash2 } from "lucide-react"
+import { History, ArrowUpCircle, ArrowDownCircle, SlidersHorizontal, RefreshCw } from "lucide-react"
 
 interface Essence { id: string; name: string }
 interface Movement {
@@ -33,11 +33,7 @@ export default function StockMovementsPage() {
   const [totalPages, setTotalPages] = useState(1)
   const [total, setTotal] = useState(0)
 
-  async function fetchMovements(p = 1, eId = essenceFilter) {
-    setLoading(true)
-    const params = new URLSearchParams({ page: String(p) })
-    if (eId) params.set("essenceId", eId)
-    const res = await fetch(`/api/admin/stock-movements?${params}`)
+  async function applyMovements(res: Response) {
     if (res.ok) {
       const data = await res.json()
       setMovements(data.movements)
@@ -47,12 +43,20 @@ export default function StockMovementsPage() {
     setLoading(false)
   }
 
-  async function fetchEssences() {
-    const res = await fetch("/api/admin/essences")
-    if (res.ok) setEssences(await res.json())
+  function fetchMovements(p = 1, eId = essenceFilter) {
+    setLoading(true)
+    const params = new URLSearchParams({ page: String(p) })
+    if (eId) params.set("essenceId", eId)
+    return fetch(`/api/admin/stock-movements?${params}`).then(applyMovements)
   }
 
-  useEffect(() => { fetchEssences(); fetchMovements() }, [])
+  useEffect(() => {
+    fetch("/api/admin/essences").then(async (res) => {
+      if (res.ok) setEssences(await res.json())
+    })
+    fetch("/api/admin/stock-movements?page=1").then(applyMovements)
+     
+  }, [])
 
   function handleFilterChange(val: string | null) {
     const v = !val || val === "ALL" ? "" : val

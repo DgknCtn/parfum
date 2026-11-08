@@ -1,85 +1,133 @@
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
-import { createClient } from "@/lib/supabase/server"
-import { computeStockStatus } from "@/lib/stock-calculator"
+import { requireAdmin, actorOf } from "@/lib/auth"
+import { apiError, HttpError } from "@/lib/api"
+import { EssenceFields } from "@/lib/schemas"
+import { computeStockStatus, round2 } from "@/lib/stock-calculator"
+import { applyStockDelta, recordMovement } from "@/lib/stock-service"
+import { logActivity } from "@/lib/activity"
+import { revalidateCatalog } from "@/lib/revalidate"
 import { z } from "zod"
 
-async function requireAuth() {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) throw new Error("Unauthorized")
-  return user
-}
+type Params = { params: Promise<{ id: string }> }
 
-const UpdateSchema = z.object({
-  name: z.string().min(1).optional(),
-  genderCategory: z.enum(["KADIN", "ERKEK", "UNISEX", "BELIRTILMEMIS"]).optional(),
-  initialVolumeMl: z.number().positive().optional(),
-  currentVolumeMl: z.number().min(0).optional(),
-  minimumStockThresholdMl: z.number().min(0).optional(),
-  notes: z.string().optional(),
-  supplier: z.string().optional(),
-  pricePerMl: z.number().min(0).optional(),
-  adjustmentReason: z.string().optional(),
+const UpdateSchema = EssenceFields.partial().extend({
+  // Manuel stok düzeltmesi: hedef kalan ml + zorunlu sebep (PRD §7)
+  currentVolumeMl: z.number().finite().min(0).max(100_000).optional(),
+  adjustmentReason: z.string().trim().max(500).optional(),
 })
 
-export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function PATCH(request: Request, { params }: Params) {
   try {
-    const user = await requireAuth()
+    const user = await requireAdmin()
+    const actor = actorOf(user)
     const { id } = await params
-    const body = await request.json()
-    const data = UpdateSchema.parse(body)
-    const { adjustmentReason, ...updateData } = data
+    const data = UpdateSchema.parse(await request.json())
+    const { currentVolumeMl, adjustmentReason, initialVolumeMl, ...meta } = data
 
-    const existing = await prisma.essence.findUniqueOrThrow({ where: { id } })
+    if (currentVolumeMl !== undefined && (!adjustmentReason || adjustmentReason.length < 3))
+      throw new HttpError(400, "Manuel stok düzeltmesi için sebep notu zorunludur", { field: "adjustmentReason" })
 
-    if (data.currentVolumeMl !== undefined) {
-      const diff = data.currentVolumeMl - existing.currentVolumeMl
-      const newStatus = computeStockStatus(
-        data.currentVolumeMl,
-        data.minimumStockThresholdMl ?? existing.minimumStockThresholdMl
-      )
+    const essence = await prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM "Essence" WHERE id = ${id} FOR UPDATE`
+      const existing = await tx.essence.findFirst({ where: { id, deletedAt: null } })
+      if (!existing) throw new HttpError(404, "Esans bulunamadı")
 
-      const essence = await prisma.$transaction(async (tx) => {
-        const e = await tx.essence.update({ where: { id }, data: { ...updateData, status: newStatus } })
-        if (diff !== 0) {
-          await tx.stockMovement.create({
-            data: {
-              essenceId: id,
-              movementType: "manual_adjustment",
-              quantityMl: diff,
-              reason: adjustmentReason ?? "Manuel düzeltme",
-              createdBy: user.email ?? user.id,
-            },
+      // 1) Meta alanlar
+      const metaData: Record<string, unknown> = {}
+      for (const [k, v] of Object.entries(meta)) if (v !== undefined) metaData[k] = v === "" ? null : v
+      if (Object.keys(metaData).length) {
+        await tx.essence.update({ where: { id }, data: metaData })
+        await logActivity(tx, {
+          action: "essence_updated",
+          entityType: "essence",
+          entityId: id,
+          message: `${meta.name ?? existing.name} esansının bilgileri güncellendi (${Object.keys(metaData).join(", ")}).`,
+          actor,
+        })
+      }
+
+      // 2) Başlangıç stoğu değişirse kalan stok aynı fark kadar yeniden hesaplanır
+      if (initialVolumeMl !== undefined && round2(initialVolumeMl) !== round2(existing.initialVolumeMl)) {
+        const delta = round2(initialVolumeMl - existing.initialVolumeMl)
+        await tx.essence.update({ where: { id }, data: { initialVolumeMl: round2(initialVolumeMl) } })
+        await applyStockDelta(tx, id, delta)
+        await recordMovement(tx, {
+          essenceId: id,
+          movementType: "correction",
+          quantityMl: delta,
+          reason: `Başlangıç stoğu ${existing.initialVolumeMl} → ${initialVolumeMl} ml olarak düzeltildi`,
+          createdBy: actor,
+        })
+        await logActivity(tx, {
+          action: "essence_recalculated",
+          entityType: "essence",
+          entityId: id,
+          message: `${existing.name} başlangıç stoğu ${existing.initialVolumeMl} → ${initialVolumeMl} ml; kalan stok ${delta > 0 ? "+" : ""}${delta} ml güncellendi.`,
+          actor,
+        })
+      }
+
+      // 3) Manuel düzeltme
+      if (currentVolumeMl !== undefined) {
+        const fresh = await tx.essence.findUniqueOrThrow({ where: { id } })
+        const delta = round2(currentVolumeMl - fresh.currentVolumeMl)
+        if (delta !== 0) {
+          await applyStockDelta(tx, id, delta, { allowNegative: true })
+          await recordMovement(tx, {
+            essenceId: id,
+            movementType: "manual_adjustment",
+            quantityMl: delta,
+            reason: adjustmentReason!,
+            createdBy: actor,
+          })
+          await logActivity(tx, {
+            action: "manual_stock_adjustment_created",
+            entityType: "essence",
+            entityId: id,
+            message: `${fresh.name} kalan stok manuel olarak ${fresh.currentVolumeMl} ml'den ${round2(currentVolumeMl)} ml'ye güncellendi. Sebep: ${adjustmentReason}`,
+            actor,
           })
         }
-        return e
-      })
-      return NextResponse.json(essence)
-    }
+      }
 
-    const finalStatus = updateData.minimumStockThresholdMl !== undefined
-      ? computeStockStatus(existing.currentVolumeMl, updateData.minimumStockThresholdMl)
-      : undefined
-
-    const essence = await prisma.essence.update({
-      where: { id },
-      data: finalStatus ? { ...updateData, status: finalStatus } : updateData,
+      // 4) Eşik değiştiyse durum yeniden hesaplanır
+      const final = await tx.essence.findUniqueOrThrow({ where: { id } })
+      const status = computeStockStatus(final.currentVolumeMl, final.minimumStockThresholdMl)
+      return status === final.status ? final : tx.essence.update({ where: { id }, data: { status } })
     })
+
+    revalidateCatalog()
     return NextResponse.json(essence)
   } catch (err) {
-    if (err instanceof z.ZodError) return NextResponse.json({ error: err.issues }, { status: 400 })
-    return NextResponse.json({ error: "Error" }, { status: 500 })
+    return apiError(err)
   }
 }
 
-export async function DELETE(_: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function DELETE(_: Request, { params }: Params) {
   try {
-    await requireAuth()
+    const user = await requireAdmin()
     const { id } = await params
-    await prisma.essence.delete({ where: { id } })
+    const essence = await prisma.essence.findFirst({
+      where: { id, deletedAt: null },
+      include: { _count: { select: { batches: { where: { deletedAt: null } } } } },
+    })
+    if (!essence) throw new HttpError(404, "Esans bulunamadı")
+    if (essence._count.batches > 0)
+      throw new HttpError(
+        409,
+        `Bu esansı kullanan ${essence._count.batches} parti var. Önce partileri silin veya başka esansa taşıyın.`
+      )
+    await prisma.essence.update({ where: { id }, data: { deletedAt: new Date() } })
+    await logActivity(prisma, {
+      action: "essence_deleted",
+      entityType: "essence",
+      entityId: id,
+      message: `${essence.name} esansı silindi.`,
+      actor: actorOf(user),
+    })
     return NextResponse.json({ success: true })
-  } catch {
-    return NextResponse.json({ error: "Error" }, { status: 500 })
+  } catch (err) {
+    return apiError(err)
   }
 }

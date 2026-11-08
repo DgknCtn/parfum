@@ -3,16 +3,17 @@
 import { useState } from "react"
 import { Sidebar } from "./Sidebar"
 import { Menu } from "lucide-react"
+import { ConfirmProvider } from "./ConfirmDialog"
 
 export function AdminShell({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
 
   return (
-    <>
+    <ConfirmProvider>
       {/* Mobile top bar */}
       <div
         className="md:hidden fixed top-0 left-0 right-0 z-50 h-14 flex items-center justify-between px-4"
-        style={{ background: "var(--obsidian)", borderBottom: "1px solid rgba(201,168,92,0.1)" }}
+        style={{ background: "var(--obsidian)", borderBottom: "1px solid rgba(201,168,92,0.1)", ["--text-muted-warm" as string]: "#a8a092" }}
       >
         <div className="flex items-center gap-2">
           <span className="text-[10px] tracking-[0.35em] uppercase" style={{ color: "var(--gold)" }}>
@@ -26,6 +27,9 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
           </span>
         </div>
         <button
+          type="button"
+          aria-expanded={sidebarOpen}
+          aria-controls="admin-sidebar"
           onClick={() => setSidebarOpen(true)}
           className="p-2 rounded-md transition-opacity hover:opacity-70"
           aria-label="Menüyü aç"
@@ -49,6 +53,6 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
           {children}
         </div>
       </main>
-    </>
+    </ConfirmProvider>
   )
 }

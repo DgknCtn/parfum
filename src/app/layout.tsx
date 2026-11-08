@@ -1,21 +1,33 @@
 import type { Metadata } from "next"
-import { Gloock, Instrument_Sans } from "next/font/google"
+import { Gloock, Instrument_Sans, JetBrains_Mono } from "next/font/google"
+import { siteUrl, SITE_NAME } from "@/lib/site"
 import { Toaster } from "sonner"
 import "./globals.css"
 
 const gloock = Gloock({
   weight: "400",
   variable: "--font-gloock",
-  subsets: ["latin"],
+  subsets: ["latin", "latin-ext"],
+  display: "swap",
 })
 
 const instrumentSans = Instrument_Sans({
   variable: "--font-instrument",
-  subsets: ["latin"],
+  subsets: ["latin", "latin-ext"],
   weight: ["400", "500", "600"],
+  display: "swap",
+})
+
+const jetbrains = JetBrains_Mono({
+  variable: "--font-jetbrains",
+  subsets: ["latin", "latin-ext"],
+  weight: ["400", "500"],
+  display: "swap",
 })
 
 export const metadata: Metadata = {
+  metadataBase: new URL(siteUrl()),
+  applicationName: SITE_NAME,
   title: {
     default: "Atelier Parfum — Koleksiyon Kataloğu",
     template: "%s | Atelier Parfum",
@@ -25,13 +37,14 @@ export const metadata: Metadata = {
   openGraph: {
     type: "website",
     locale: "tr_TR",
-    siteName: "Atelier Parfum",
+    siteName: SITE_NAME,
   },
+  twitter: { card: "summary_large_image" },
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="tr" className={`${gloock.variable} ${instrumentSans.variable} h-full`}>
+    <html lang="tr" className={`${gloock.variable} ${instrumentSans.variable} ${jetbrains.variable} h-full`}>
       <body className="min-h-full flex flex-col font-sans antialiased">
         {children}
         <Toaster

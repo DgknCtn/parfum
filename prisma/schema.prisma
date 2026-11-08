@@ -50,6 +50,7 @@ model Essence {
   status                  StockStatus    @default(MEVCUT)
   supplier                String?
   pricePerMl              Float?
+  deletedAt               DateTime?
   createdAt               DateTime       @default(now())
   updatedAt               DateTime       @updatedAt
 
@@ -73,10 +74,13 @@ model Perfume {
   slug            String         @unique
   latestBatchDate DateTime?
   totalProducedMl Float          @default(0)
+  deletedAt       DateTime?
   createdAt       DateTime       @default(now())
   updatedAt       DateTime       @updatedAt
 
   batches Batch[]
+
+  @@index([publicVisible, deletedAt])
 }
 
 model Batch {
@@ -94,6 +98,8 @@ model Batch {
   notes           String?
   publicVisible   Boolean   @default(false)
   stockDeducted   Boolean   @default(false)
+  productionDateUnknown Boolean @default(false)
+  createdBy       String?
   deletedAt       DateTime?
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
@@ -101,6 +107,9 @@ model Batch {
   perfume        Perfume         @relation(fields: [perfumeId], references: [id])
   essence        Essence         @relation(fields: [essenceId], references: [id])
   stockMovements StockMovement[]
+
+  @@index([perfumeId, deletedAt])
+  @@index([essenceId])
 }
 
 model StockMovement {
@@ -115,11 +124,15 @@ model StockMovement {
 
   essence Essence @relation(fields: [essenceId], references: [id])
   batch   Batch?  @relation(fields: [batchId], references: [id])
+
+  @@index([essenceId])
+  @@index([batchId])
 }
 
 model ImportJob {
   id             String       @id @default(cuid())
   filename       String
+  fileHash       String?
   status         ImportStatus @default(pending)
   totalRows      Int          @default(0)
   successfulRows Int          @default(0)
@@ -129,4 +142,26 @@ model ImportJob {
   errorReport    Json?
   createdAt      DateTime     @default(now())
   completedAt    DateTime?
+
+  @@index([fileHash])
+}
+
+model ActivityLog {
+  id         String   @id @default(cuid())
+  action     String
+  entityType String
+  entityId   String?
+  message    String
+  metadata   Json?
+  createdBy  String?
+  createdAt  DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([entityType, entityId])
+}
+
+model Setting {
+  key       String   @id
+  value     Json
+  updatedAt DateTime @updatedAt
 }

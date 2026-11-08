@@ -1,56 +1,38 @@
 import { NextResponse } from "next/server"
-import { prisma } from "@/lib/prisma"
+import { getCatalog, formatRatio, formatMl, STOCK_LABEL, GENDER_LABEL } from "@/lib/catalog"
+import { parseCatalogParams } from "@/lib/schemas"
+import { apiError, parsePositiveInt } from "@/lib/api"
+import { rateLimit, clientIp } from "@/lib/rate-limit"
 
-export const revalidate = 60
+export const dynamic = "force-dynamic"
 
+/** GET /api/public/perfumes?gender=ERKEK&stock=available&q=sauvage&sort=name&page=1 */
 export async function GET(request: Request) {
-  const { searchParams } = new URL(request.url)
-  const gender = searchParams.get("gender")
-  const status = searchParams.get("status")
-  const search = searchParams.get("q")
-  const page = parseInt(searchParams.get("page") ?? "1")
-  const pageSize = 24
+  try {
+    const rl = rateLimit(`public:${clientIp(request)}`, 60, 60_000)
+    if (!rl.ok)
+      return NextResponse.json({ error: "Çok fazla istek. Lütfen biraz sonra tekrar deneyin." }, { status: 429, headers: { "Retry-After": String(rl.retryAfter) } })
+    const { searchParams } = new URL(request.url)
+    const params = parseCatalogParams(Object.fromEntries(searchParams.entries()))
+    const page = parsePositiveInt(searchParams.get("page"), 1, 1000)
+    const pageSize = 24
 
-  const perfumes = await prisma.perfume.findMany({
-    where: {
-      publicVisible: true,
-      ...(gender ? { genderCategory: gender as never } : {}),
-      ...(search
-        ? {
-            OR: [
-              { name: { contains: search, mode: "insensitive" } },
-              { brandName: { contains: search, mode: "insensitive" } },
-              { description: { contains: search, mode: "insensitive" } },
-            ],
-          }
-        : {}),
-    },
-    orderBy: [{ latestBatchDate: "desc" }, { name: "asc" }],
-    skip: (page - 1) * pageSize,
-    take: pageSize,
-    select: {
-      id: true,
-      name: true,
-      brandName: true,
-      genderCategory: true,
-      description: true,
-      slug: true,
-      latestBatchDate: true,
-      totalProducedMl: true,
-      batches: {
-        where: { deletedAt: null },
-        orderBy: { productionDate: "desc" },
-        take: 1,
-        select: {
-          essenceRatio: true,
-          totalVolumeMl: true,
-          batchLabel: true,
-        },
-      },
-    },
-  })
+    const all = await getCatalog(params)
+    const items = all.slice((page - 1) * pageSize, page * pageSize).map((p) => ({
+      id: p.id,
+      name: p.name,
+      brandName: p.brandName,
+      slug: p.slug,
+      genderCategory: GENDER_LABEL[p.genderCategory],
+      stockStatus: p.stock ? STOCK_LABEL[p.stock] : null,
+      latestBatchDate: p.latestBatchDate?.toISOString().slice(0, 10) ?? null,
+      summary: p.latestBatch
+        ? `${formatRatio(p.latestBatch.essenceRatio)} esans oranı ile üretilmiş ${formatMl(p.latestBatch.totalVolumeMl)} reçete`
+        : null,
+    }))
 
-  const total = await prisma.perfume.count({ where: { publicVisible: true } })
-
-  return NextResponse.json({ items: perfumes, total, page, pageSize })
+    return NextResponse.json({ items, total: all.length, page, pageSize, pages: Math.max(1, Math.ceil(all.length / pageSize)) })
+  } catch (err) {
+    return apiError(err)
+  }
 }

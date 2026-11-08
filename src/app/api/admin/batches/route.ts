@@ -1,42 +1,21 @@
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
-import { createClient } from "@/lib/supabase/server"
-import { computeStockStatus } from "@/lib/stock-calculator"
-import { z } from "zod"
-
-const BatchSchema = z.object({
-  perfumeId: z.string().min(1),
-  essenceId: z.string().min(1),
-  batchLabel: z.string().min(1),
-  productionDate: z.string(),
-  totalVolumeMl: z.number().positive(),
-  essenceRatio: z.number().min(0).max(1),
-  essenceVolumeMl: z.number().positive(),
-  alcoholVolumeMl: z.number().min(0),
-  waterVolumeMl: z.number().min(0),
-  cost: z.number().optional(),
-  notes: z.string().optional(),
-  publicVisible: z.boolean().default(false),
-})
-
-async function requireAuth() {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) throw new Error("Unauthorized")
-  return user
-}
+import { requireAdmin, actorOf } from "@/lib/auth"
+import { apiError, HttpError } from "@/lib/api"
+import { BatchCreateSchema, checkBatchConsistency } from "@/lib/schemas"
+import { consumeForBatch, recomputePerfumeAggregates } from "@/lib/stock-service"
+import { round2 } from "@/lib/stock-calculator"
+import { logActivity } from "@/lib/activity"
+import { revalidateCatalog } from "@/lib/revalidate"
 
 export async function GET(request: Request) {
   try {
-    await requireAuth()
+    await requireAdmin()
     const { searchParams } = new URL(request.url)
     const perfumeId = searchParams.get("perfumeId")
 
     const batches = await prisma.batch.findMany({
-      where: {
-        deletedAt: null,
-        ...(perfumeId ? { perfumeId } : {}),
-      },
+      where: { deletedAt: null, ...(perfumeId ? { perfumeId } : {}) },
       orderBy: { productionDate: "desc" },
       include: {
         perfume: { select: { id: true, name: true, brandName: true } },
@@ -44,88 +23,78 @@ export async function GET(request: Request) {
       },
     })
     return NextResponse.json(batches)
-  } catch {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  } catch (err) {
+    return apiError(err)
   }
 }
 
 export async function POST(request: Request) {
   try {
-    const user = await requireAuth()
-    const body = await request.json()
-    const data = BatchSchema.parse(body)
+    const user = await requireAdmin()
+    const actor = actorOf(user)
+    const data = BatchCreateSchema.parse(await request.json())
+    const warnings = checkBatchConsistency(data)
 
-    const essence = await prisma.essence.findUniqueOrThrow({ where: { id: data.essenceId } })
+    const perfume = await prisma.perfume.findFirst({ where: { id: data.perfumeId, deletedAt: null }, select: { id: true, name: true } })
+    if (!perfume) throw new HttpError(404, "Parfüm bulunamadı")
 
-    if (essence.currentVolumeMl < data.essenceVolumeMl) {
-      return NextResponse.json(
-        {
-          error: "Yetersiz stok",
-          available: essence.currentVolumeMl,
-          required: data.essenceVolumeMl,
-        },
-        { status: 422 }
-      )
+    const values = {
+      perfumeId: data.perfumeId,
+      essenceId: data.essenceId,
+      batchLabel: data.batchLabel,
+      productionDate: data.productionDate,
+      totalVolumeMl: round2(data.totalVolumeMl),
+      essenceRatio: data.essenceRatio,
+      essenceVolumeMl: round2(data.essenceVolumeMl),
+      alcoholVolumeMl: round2(data.alcoholVolumeMl),
+      waterVolumeMl: round2(data.waterVolumeMl),
+      cost: data.cost ?? null,
+      notes: data.notes || null,
+      publicVisible: data.publicVisible ?? false,
     }
 
-    const newVolume = essence.currentVolumeMl - data.essenceVolumeMl
-    const newStatus = computeStockStatus(newVolume, essence.minimumStockThresholdMl)
-
-    const result = await prisma.$transaction(async (tx) => {
-      const batch = await tx.batch.create({
-        data: {
-          ...data,
-          productionDate: new Date(data.productionDate),
-          stockDeducted: true,
-        },
+    const { batch, stock } = await prisma.$transaction(async (tx) => {
+      const batch = await tx.batch.create({ data: { ...values, stockDeducted: true, createdBy: actor } })
+      const reason = data.allowNegativeStock
+        ? `${data.batchLabel} üretimi (eksi stok onaylı: ${data.negativeStockReason})`
+        : `${data.batchLabel} üretimi için kullanıldı`
+      const stock = await consumeForBatch(tx, {
+        essenceId: data.essenceId,
+        ml: values.essenceVolumeMl,
+        batchId: batch.id,
+        reason,
+        actor,
+        allowNegative: data.allowNegativeStock,
       })
-
-      await tx.essence.update({
-        where: { id: data.essenceId },
-        data: {
-          currentVolumeMl: newVolume,
-          totalUsedMl: { increment: data.essenceVolumeMl },
-          status: newStatus,
-        },
+      await recomputePerfumeAggregates(tx, data.perfumeId)
+      await logActivity(tx, {
+        action: "batch_created",
+        entityType: "batch",
+        entityId: batch.id,
+        message: `${values.essenceVolumeMl} ml ${stock.essence.name} esansı ${perfume.name} — ${data.batchLabel} üretimi için kullanıldı.`,
+        metadata: { perfumeId: data.perfumeId, essenceId: data.essenceId, warnings },
+        actor,
       })
-
-      await tx.stockMovement.create({
-        data: {
-          essenceId: data.essenceId,
-          batchId: batch.id,
-          movementType: "production_usage",
-          quantityMl: -data.essenceVolumeMl,
-          reason: `${data.batchLabel} üretimi için kullanıldı`,
-          createdBy: user.email ?? user.id,
-        },
-      })
-
-      await tx.perfume.update({
-        where: { id: data.perfumeId },
-        data: {
-          latestBatchDate: new Date(data.productionDate),
-          totalProducedMl: { increment: data.totalVolumeMl },
-        },
-      })
-
-      return batch
+      return { batch, stock }
     })
 
+    revalidateCatalog()
     return NextResponse.json(
       {
-        batch: result,
+        id: batch.id,
+        batch,
+        warnings,
         stockStatus: {
           essenceId: data.essenceId,
-          previousVolumeMl: essence.currentVolumeMl,
-          usedVolumeMl: data.essenceVolumeMl,
-          currentVolumeMl: newVolume,
-          status: newStatus,
+          previousVolumeMl: stock.previousVolumeMl,
+          usedVolumeMl: values.essenceVolumeMl,
+          currentVolumeMl: stock.essence.currentVolumeMl,
+          status: stock.essence.status,
         },
       },
       { status: 201 }
     )
   } catch (err) {
-    if (err instanceof z.ZodError) return NextResponse.json({ error: err.issues }, { status: 400 })
-    return NextResponse.json({ error: "Error" }, { status: 500 })
+    return apiError(err)
   }
 }

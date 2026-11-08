@@ -14,6 +14,8 @@ import {
   Globe,
   X,
   History,
+  ScrollText,
+  Settings,
 } from "lucide-react"
 
 const navItems = [
@@ -22,7 +24,9 @@ const navItems = [
   { href: "/admin/essences", label: "Esanslar", icon: Droplets },
   { href: "/admin/batches", label: "Üretimler", icon: Package },
   { href: "/admin/stock-movements", label: "Stok Geçmişi", icon: History },
+  { href: "/admin/activity", label: "Etkinlik Günlüğü", icon: ScrollText },
   { href: "/admin/import", label: "Excel İçe Aktar", icon: FileSpreadsheet },
+  { href: "/admin/settings", label: "Katalog Ayarları", icon: Settings },
 ]
 
 interface SidebarProps {
@@ -48,6 +52,8 @@ export function Sidebar({ open, onClose }: SidebarProps) {
 
   return (
     <aside
+      id="admin-sidebar"
+      aria-label="Yönetim menüsü"
       className={[
         "fixed left-0 top-0 h-full w-56 flex flex-col z-40",
         "transition-transform duration-200 ease-in-out",
@@ -56,6 +62,8 @@ export function Sidebar({ open, onClose }: SidebarProps) {
       style={{
         background: "var(--obsidian)",
         borderRight: "1px solid rgba(201,168,92,0.1)",
+        // Koyu zeminde soluk metin için açık ton (admin-theme açık zemine göre koyulaştırıyor)
+        ["--text-muted-warm" as string]: "#a8a092",
       }}
     >
       {/* Logo */}
@@ -76,6 +84,7 @@ export function Sidebar({ open, onClose }: SidebarProps) {
         </div>
         {/* Close button — only visible on mobile */}
         <button
+          type="button"
           onClick={onClose}
           className="md:hidden p-1 rounded opacity-50 hover:opacity-100 transition-opacity mt-1"
           aria-label="Menüyü kapat"
@@ -94,7 +103,8 @@ export function Sidebar({ open, onClose }: SidebarProps) {
               key={item.href}
               href={item.href}
               onClick={handleNavClick}
-              className="flex items-center gap-3 px-3 py-2.5 rounded-md text-sm transition-all duration-150 group"
+              aria-current={active ? "page" : undefined}
+              className="flex items-center gap-3 px-3 py-2.5 rounded-md text-sm transition-all duration-150 group hover:bg-white/5 focus-visible:outline-2 focus-visible:outline-[var(--gold)]"
               style={{
                 background: active ? "rgba(201,168,92,0.12)" : "transparent",
                 color: active ? "var(--gold)" : "var(--text-muted-warm)",
@@ -129,6 +139,7 @@ export function Sidebar({ open, onClose }: SidebarProps) {
           <span className="tracking-wide">Public Katalog</span>
         </Link>
         <button
+          type="button"
           onClick={handleLogout}
           className="w-full flex items-center gap-3 px-3 py-2.5 rounded-md text-xs transition-all duration-150 hover:text-red-400"
           style={{ color: "var(--text-muted-warm)" }}
